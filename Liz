@@ -1,0 +1,314 @@
+-- =========================================================
+-- JEM HUB: THE TOWER (STRICT CLEAR + COOLDOWN FIX)
+-- =========================================================
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "JEM HUB " .. Fluent.Version,
+    SubTitle = "by Senior Lua (Strict Clear)",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl
+})
+
+-- =========================================================
+-- VARIABLES & CONFIG
+-- =========================================================
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Remote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Signal"):WaitForChild("RemoteEvent")
+
+local Config = {
+    AutoDungeon = false,
+    AutoFarmMob = false,
+    AuraKill = false,
+    AutoAbility = false,
+    SkillDelay = 0, 
+    NoEffect = false,
+    HideDamage = false,
+    SelectedMob = "All", 
+    MobFolder = "Live",
+    HoverHeight = 12
+}
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Auto Dungeon", Icon = "castle" }),
+    Farm = Window:AddTab({ Title = "Auto Farm", Icon = "sword" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+-- =========================================================
+-- LOGIC FUNCTIONS
+-- =========================================================
+
+-- Helper: หันกล้อง
+local function LookAtTarget(targetPart)
+    if not targetPart then return end
+    local cam = Workspace.CurrentCamera
+    cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position)
+end
+
+-- [1] Hide Damage
+function RunHideDamage()
+    task.spawn(function()
+        while Config.HideDamage do
+            local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+            if pGui then
+                for _, gui in pairs(pGui:GetChildren()) do
+                    local name = gui.Name:lower()
+                    if name:find("damage") or name:find("indicator") or name:find("combat") or name:find("text") then
+                        if gui:IsA("ScreenGui") or gui:IsA("BillboardGui") then gui.Enabled = false end
+                    end
+                end
+            end
+            task.wait(1)
+        end
+        local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if pGui then
+            for _, gui in pairs(pGui:GetChildren()) do
+                if gui.Name:lower():find("damage") then gui.Enabled = true end
+            end
+        end
+    end)
+end
+
+-- [2] Anti-Lag Ultimate
+function RunNoEffect()
+    task.spawn(function()
+        while Config.NoEffect do
+            pcall(function() -- Clear Backpack Script
+                local b = LocalPlayer:FindFirstChild("Backpack")
+                if b and b:FindFirstChild("Scripts") then
+                    local m = b.Scripts:FindFirstChild("NewModules")
+                    if m then m:Destroy() end
+                end
+            end)
+            pcall(function() -- Clear Madara VFX
+                local v = ReplicatedStorage:FindFirstChild("VFX")
+                if v and v:FindFirstChild("Madara") then v.Madara:Destroy() end
+            end)
+            for _, obj in pairs(Workspace:GetChildren()) do -- Clear HitParts
+                if obj.Name == "HitPart" then
+                    if obj:FindFirstChild("Explosion") then obj.Explosion:Destroy() end
+                    if obj:FindFirstChild("a0") then obj.a0:Destroy() end
+                    if obj:FindFirstChild("a1") then obj.a1:Destroy() end
+                end
+                if obj.Name == "MadaraSlam" or obj.Name == "Splash" then obj:Destroy() end
+            end
+            task.wait(1)
+        end
+    end)
+end
+
+-- [3] Auto Ability
+function RunAutoAbility()
+    task.spawn(function()
+        local r = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("AbilityHandler")
+        local args = { "MadaraFifth" }
+        while Config.AutoAbility do
+            r:FireServer(unpack(args))
+            if Config.SkillDelay <= 0 then task.wait() else task.wait(Config.SkillDelay) end
+        end
+    end)
+end
+
+-- [4] Aura Kill
+function RunAuraKill()
+    task.spawn(function()
+        local r = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("BladeCombatRemote")
+        while Config.AuraKill do
+            r:FireServer()
+            task.wait()
+        end
+    end)
+end
+
+-- [5] Auto Dungeon
+function RunAutoDungeon()
+    task.spawn(function()
+        while Config.AutoDungeon do
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local npc = Workspace:FindFirstChild("NPCS") and Workspace.NPCS:FindFirstChild("DeathTapz")
+                if npc then
+                    char.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 4)
+                    LookAtTarget(npc.HumanoidRootPart)
+                    task.wait(0.5)
+                    for _, v in pairs(npc:GetDescendants()) do
+                        if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end
+                    end
+                end
+            end
+            task.wait(2)
+            
+            local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+            if pGui then
+                local gui = pGui:FindFirstChild("Dungeon")
+                if gui and gui.Enabled then
+                    local btn = gui.Frames.Dungeon.Back.Start
+                    if btn then
+                         VirtualInputManager:SendMouseButtonEvent(btn.AbsolutePosition.X+20, btn.AbsolutePosition.Y+20, 0, true, game, 1)
+                         task.wait(0.1)
+                         VirtualInputManager:SendMouseButtonEvent(btn.AbsolutePosition.X+20, btn.AbsolutePosition.Y+20, 0, false, game, 1)
+                    end
+                end
+            end
+            
+            local timeout = 0
+            repeat
+                if not Config.AutoDungeon then break end
+                task.wait(1)
+                timeout = timeout + 1
+            until (Workspace:FindFirstChild("Floors") and Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NextGate")) or timeout > 60
+
+            if timeout <= 60 then
+                task.wait(2)
+                Remote:FireServer("Towers:OpenGate")
+            end
+            task.wait(5)
+        end
+    end)
+end
+
+-- [6] Auto Farm (แก้ใหม่: Strict Clear + Cooldown)
+function ToggleAntiGravity(state)
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    if state then
+        if not char.HumanoidRootPart:FindFirstChild("JemAntiGravity") then
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "JemAntiGravity"
+            bv.Velocity = Vector3.new(0,0,0)
+            bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+            bv.Parent = char.HumanoidRootPart
+        end
+    else
+        local bv = char.HumanoidRootPart:FindFirstChild("JemAntiGravity")
+        if bv then bv:Destroy() end
+    end
+end
+
+function RunAutoFarm()
+    ToggleAntiGravity(true)
+    task.spawn(function()
+        while Config.AutoFarmMob do
+            task.wait() -- เช็คตลอดเวลา
+            local char = LocalPlayer.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+            
+            local folder = Workspace:FindFirstChild(Config.MobFolder)
+            local target = nil
+            local mobCount = 0 -- นับจำนวนมอนที่เหลือ
+            local minDist = 9999
+            
+            -- Step 1: สแกนหามอนทั้งหมดก่อน
+            if folder then
+                for _, mob in pairs(folder:GetChildren()) do
+                    if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
+                        if Config.SelectedMob == "All" or mob.Name == Config.SelectedMob then
+                            mobCount = mobCount + 1 -- เจอ 1 ตัว นับไว้
+                            
+                            -- หาตัวใกล้สุดเหมือนเดิม
+                            local dist = (mob.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                            if dist < minDist then
+                                minDist = dist
+                                target = mob
+                            end
+                        end
+                    end
+                end
+            end
+            
+            -- Step 2: ตัดสินใจ
+            if mobCount > 0 and target then
+                -- [[ ยังมีมอนเหลืออยู่ (Count > 0) -> ห้ามไปยุ่งกับ NPC ]]
+                -- บินไปเกาะหัวมอนตัวนั้น
+                local targetPos = target.HumanoidRootPart.Position
+                local flyPos = CFrame.new(targetPos + Vector3.new(0, Config.HoverHeight, 0), targetPos)
+                char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame:Lerp(flyPos, 0.5)
+                char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position, targetPos)
+            else
+                -- [[ มอนตายเกลี้ยงแล้ว (Count == 0) -> เตรียมหา NPC ]]
+                
+                -- ใส่ Cooldown ตรงนี้ตามที่ขอ (1.5 วินาที)
+                -- เพื่อไม่ให้มันวาร์ปปุบปับทันทีที่มอนตาย
+                task.wait(1.5) 
+                
+                -- เช็คอีกรอบว่ายังเปิดโปรอยู่ไหม + มอนยังไม่เกิดใหม่
+                if Config.AutoFarmMob then
+                     for _, prompt in pairs(Workspace:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                            if prompt.Parent then
+                                local targetPart = prompt.Parent:IsA("Model") and prompt.Parent:FindFirstChild("HumanoidRootPart") or prompt.Parent
+                                if targetPart and targetPart:IsA("BasePart") then
+                                    -- วาร์ปไปจูบปาก
+                                    char.HumanoidRootPart.CFrame = targetPart.CFrame
+                                    LookAtTarget(targetPart) -- หันกล้อง
+                                    
+                                    task.wait(0.3) -- รอเซิร์ฟเวอร์
+                                    
+                                    -- กดปุ่ม
+                                    if fireproximityprompt then
+                                        fireproximityprompt(prompt)
+                                    else
+                                        prompt:InputHoldBegin()
+                                        task.wait(prompt.HoldDuration + 0.1)
+                                        prompt:InputHoldEnd()
+                                    end
+                                    
+                                    -- กดเสร็จแล้ว รออีกนิดกันมันพยายามกดรัวซ้ำ
+                                    task.wait(1) 
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        ToggleAntiGravity(false)
+    end)
+end
+
+-- =========================================================
+-- UI SETUP (Minified)
+-- =========================================================
+
+local SectionDungeon = Tabs.Main:AddSection("Lobby Loop")
+local ToggleDungeon = Tabs.Main:AddToggle("AutoDungeonToggle", {Title = "Auto Start Dungeon", Default = false })
+ToggleDungeon:OnChanged(function() Config.AutoDungeon = ToggleDungeon.Value; if Config.AutoDungeon then RunAutoDungeon() end end)
+
+local SectionFarm = Tabs.Farm:AddSection("Attack & Skills")
+local ToggleAura = Tabs.Farm:AddToggle("AuraKillToggle", {Title = "Aura Kill (Blade)", Default = false })
+ToggleAura:OnChanged(function() Config.AuraKill = ToggleAura.Value; if Config.AuraKill then RunAuraKill() end end)
+local ToggleAbility = Tabs.Farm:AddToggle("AutoAbilityToggle", {Title = "Auto Ability (Madara)", Default = false })
+ToggleAbility:OnChanged(function() Config.AutoAbility = ToggleAbility.Value; if Config.AutoAbility then RunAutoAbility() end end)
+local SliderSkill = Tabs.Farm:AddSlider("SkillSpeedSlider", {Title = "Madara Spam Delay", Default = 0, Min = 0, Max = 1, Rounding = 2, Callback = function(V) Config.SkillDelay = V end})
+
+local SectionLag = Tabs.Farm:AddSection("Performance")
+local ToggleNoEffect = Tabs.Farm:AddToggle("NoEffectToggle", {Title = "Clean Mode (No FX / No Backpack)", Default = false })
+ToggleNoEffect:OnChanged(function() Config.NoEffect = ToggleNoEffect.Value; if Config.NoEffect then RunNoEffect() end end)
+local ToggleHideDmg = Tabs.Farm:AddToggle("HideDmgToggle", {Title = "Hide Damage Numbers", Default = false })
+ToggleHideDmg:OnChanged(function() Config.HideDamage = ToggleHideDmg.Value; if Config.HideDamage then RunHideDamage() end end)
+
+local SectionMovement = Tabs.Farm:AddSection("Movement")
+local ToggleFarm = Tabs.Farm:AddToggle("AutoFarmToggle", {Title = "Auto Farm Mob + Close Interact", Default = false })
+ToggleFarm:OnChanged(function() Config.AutoFarmMob = ToggleFarm.Value; if Config.AutoFarmMob then RunAutoFarm() else ToggleAntiGravity(false) end end)
+
+local DropdownMob = Tabs.Farm:AddDropdown("MobSelect", {Title = "Target Mob", Values = {"All", "Boss"}, Multi = false, Default = 1})
+DropdownMob:OnChanged(function(V) Config.SelectedMob = V end)
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+Window:SelectTab(2)
+
+Fluent:Notify({Title = "JEM HUB", Content = "Strict Clear & Cooldown Added!", Duration = 5})
