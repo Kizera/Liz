@@ -1,5 +1,5 @@
 -- =========================================================
--- JEM HUB: THE TOWER (FULL OPTION: FARM + DUNGEON + STORAGE + TP)
+-- JEM HUB: THE TOWER (FULL OPTION: FARM + DUNGEON + STORAGE + TP + SUPER CLEAR)
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -8,7 +8,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 
 local Window = Fluent:CreateWindow({
     Title = "JEM HUB " .. Fluent.Version,
-    SubTitle = "by Senior Lua (Strict Clear)",
+    SubTitle = "by Senior Lua (Super Clear)",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 500),
     Acrylic = true,
@@ -39,13 +39,13 @@ local Config = {
     SelectedMob = "All", 
     MobFolder = "Live",
     HoverHeight = 12,
-    SelectedTP = "Shop" -- [NEW] เก็บค่าจุดวาร์ป
+    SelectedTP = "Shop"
 }
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Auto Dungeon", Icon = "castle" }),
     Farm = Window:AddTab({ Title = "Auto Farm", Icon = "sword" }),
-    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map" }), -- [NEW] แท็บใหม่
+    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
@@ -84,22 +84,21 @@ function RunHideDamage()
     end)
 end
 
--- [2] Anti-Lag Ultimate
+-- [2] Anti-Lag Ultimate (Super Clear Edition)
 function RunNoEffect()
     task.spawn(function()
         while Config.NoEffect do
-            pcall(function() -- Clear Backpack Script
+            -- 2.1 Clear Backpack Script
+            pcall(function() 
                 local b = LocalPlayer:FindFirstChild("Backpack")
                 if b and b:FindFirstChild("Scripts") then
                     local m = b.Scripts:FindFirstChild("NewModules")
                     if m then m:Destroy() end
                 end
             end)
-            pcall(function() -- Clear Madara VFX
-                local v = ReplicatedStorage:FindFirstChild("VFX")
-                if v and v:FindFirstChild("Madara") then v.Madara:Destroy() end
-            end)
-            for _, obj in pairs(Workspace:GetChildren()) do -- Clear HitParts
+
+            -- 2.2 Clear Workspace HitParts
+            for _, obj in pairs(Workspace:GetChildren()) do 
                 if obj.Name == "HitPart" then
                     if obj:FindFirstChild("Explosion") then obj.Explosion:Destroy() end
                     if obj:FindFirstChild("a0") then obj.a0:Destroy() end
@@ -107,6 +106,27 @@ function RunNoEffect()
                 end
                 if obj.Name == "MadaraSlam" or obj.Name == "Splash" then obj:Destroy() end
             end
+
+            -- 2.3 [NEW] Clear ReplicatedStorage Folders (The Nuke List)
+            local foldersToRemove = {
+                "Particles",
+                "NewEffects",
+                "KevSFX",
+                "KevAssets",
+                "FX",
+                "Assets",
+                "VFX",
+                "VFXModules",
+                "ReiNew"
+            }
+            
+            for _, name in pairs(foldersToRemove) do
+                local folder = ReplicatedStorage:FindFirstChild(name)
+                if folder then
+                    folder:Destroy()
+                end
+            end
+
             task.wait(1)
         end
     end)
@@ -280,7 +300,7 @@ function RunAutoStorage()
     end)
 end
 
--- [8] Teleport Function (New)
+-- [8] Teleport Function
 function ExecuteTeleport()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then 
@@ -333,7 +353,7 @@ local ToggleAbility = Tabs.Farm:AddToggle("AutoAbilityToggle", {Title = "Auto Ab
 ToggleAbility:OnChanged(function() Config.AutoAbility = ToggleAbility.Value; if Config.AutoAbility then RunAutoAbility() end end)
 local SliderSkill = Tabs.Farm:AddSlider("SkillSpeedSlider", {Title = "Madara Spam Delay", Default = 0, Min = 0, Max = 1, Rounding = 2, Callback = function(V) Config.SkillDelay = V end})
 local SectionLag = Tabs.Farm:AddSection("Performance")
-local ToggleNoEffect = Tabs.Farm:AddToggle("NoEffectToggle", {Title = "Clean Mode (No FX / No Backpack)", Default = false })
+local ToggleNoEffect = Tabs.Farm:AddToggle("NoEffectToggle", {Title = "Clean Mode (Massive Clear)", Default = false })
 ToggleNoEffect:OnChanged(function() Config.NoEffect = ToggleNoEffect.Value; if Config.NoEffect then RunNoEffect() end end)
 local ToggleHideDmg = Tabs.Farm:AddToggle("HideDmgToggle", {Title = "Hide Damage Numbers", Default = false })
 ToggleHideDmg:OnChanged(function() Config.HideDamage = ToggleHideDmg.Value; if Config.HideDamage then RunHideDamage() end end)
@@ -343,7 +363,7 @@ ToggleFarm:OnChanged(function() Config.AutoFarmMob = ToggleFarm.Value; if Config
 local DropdownMob = Tabs.Farm:AddDropdown("MobSelect", {Title = "Target Mob", Values = {"All", "Boss"}, Multi = false, Default = 1})
 DropdownMob:OnChanged(function(V) Config.SelectedMob = V end)
 
--- Tab 3: Teleport [NEW]
+-- Tab 3: Teleport
 local SectionTP = Tabs.Teleport:AddSection("Waypoints")
 local DropdownTP = Tabs.Teleport:AddDropdown("TPSelect", {
     Title = "Select Destination",
@@ -362,6 +382,6 @@ Tabs.Teleport:AddButton({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-Window:SelectTab(3) -- เปิดมาหน้า Teleport เลยจะได้เทส
+Window:SelectTab(2) -- กลับมาหน้า Farm เป็นหน้าหลัก
 
-Fluent:Notify({Title = "JEM HUB", Content = "Teleport Added!", Duration = 5})
+Fluent:Notify({Title = "JEM HUB", Content = "Effects Deleted Successfully!", Duration = 5})
