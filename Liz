@@ -1,5 +1,5 @@
 -- =========================================================
--- JEM HUB: THE TOWER (FULL OPTION: FARM + DUNGEON + STORAGE + TP + SUPER CLEAR)
+-- JEM HUB: THE TOWER (FINAL UPDATE: AUTO DUNGEON LOOP + AUTO SAVE)
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -8,9 +8,9 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 
 local Window = Fluent:CreateWindow({
     Title = "JEM HUB " .. Fluent.Version,
-    SubTitle = "by Senior Lua (Super Clear)",
+    SubTitle = "by Senior Lua (Save Config Supported)",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 500),
+    Size = UDim2.fromOffset(580, 520),
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
@@ -27,8 +27,12 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Remote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Signal"):WaitForChild("RemoteEvent")
 
+-- Dungeon Event Path
+local DungeonRemotePath = ReplicatedStorage:WaitForChild("NEW37"):WaitForChild("DUNGEONS"):WaitForChild("DungeonEvent")
+
 local Config = {
     AutoDungeon = false,
+    SelectedDungeonRank = "B", 
     AutoFarmMob = false,
     AuraKill = false,
     AutoAbility = false,
@@ -40,6 +44,14 @@ local Config = {
     MobFolder = "Live",
     HoverHeight = 12,
     SelectedTP = "Shop"
+}
+
+-- ข้อมูล Ticket
+local DungeonData = {
+    ["B"] = { Name = "B Dungeon Ticket", Var = "BDTickets" },
+    ["A"] = { Name = "A Dungeon Ticket", Var = "ADTickets" },
+    ["S"] = { Name = "S Dungeon Ticket", Var = "SDTickets" },
+    ["SS"] = { Name = "SS Dungeon Ticket", Var = "SSDTickets" }
 }
 
 local Tabs = {
@@ -84,11 +96,10 @@ function RunHideDamage()
     end)
 end
 
--- [2] Anti-Lag Ultimate (Super Clear Edition)
+-- [2] Anti-Lag Ultimate
 function RunNoEffect()
     task.spawn(function()
         while Config.NoEffect do
-            -- 2.1 Clear Backpack Script
             pcall(function() 
                 local b = LocalPlayer:FindFirstChild("Backpack")
                 if b and b:FindFirstChild("Scripts") then
@@ -96,8 +107,6 @@ function RunNoEffect()
                     if m then m:Destroy() end
                 end
             end)
-
-            -- 2.2 Clear Workspace HitParts
             for _, obj in pairs(Workspace:GetChildren()) do 
                 if obj.Name == "HitPart" then
                     if obj:FindFirstChild("Explosion") then obj.Explosion:Destroy() end
@@ -106,27 +115,12 @@ function RunNoEffect()
                 end
                 if obj.Name == "MadaraSlam" or obj.Name == "Splash" then obj:Destroy() end
             end
-
-            -- 2.3 [NEW] Clear ReplicatedStorage Folders (The Nuke List)
-            local foldersToRemove = {
-                "Particles",
-                "NewEffects",
-                "KevSFX",
-                "KevAssets",
-                "FX",
-                "Assets",
-                "VFX",
-                "VFXModules",
-                "ReiNew"
-            }
-            
+            -- The Nuke List
+            local foldersToRemove = {"Particles", "NewEffects", "KevSFX", "KevAssets", "FX", "Assets", "VFX", "VFXModules", "ReiNew"}
             for _, name in pairs(foldersToRemove) do
                 local folder = ReplicatedStorage:FindFirstChild(name)
-                if folder then
-                    folder:Destroy()
-                end
+                if folder then folder:Destroy() end
             end
-
             task.wait(1)
         end
     end)
@@ -159,50 +153,62 @@ end
 function RunAutoDungeon()
     task.spawn(function()
         while Config.AutoDungeon do
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
+            local inDungeon = Workspace:FindFirstChild("Floors") 
+            
+            if not inDungeon then
+                -- [STATE: LOBBY]
+                local selected = DungeonData[Config.SelectedDungeonRank]
+                if selected then
+                    local reiNew = LocalPlayer:FindFirstChild("ReiNew")
+                    if reiNew then
+                        local ticketVar = reiNew:FindFirstChild(selected.Var)
+                        if ticketVar and ticketVar.Value > 0 then
+                            -- Use Ticket
+                            DungeonRemotePath:FireServer("Use Dungeon Ticket", { selected.Name, selected.Var })
+                            Fluent:Notify({Title = "Dungeon", Content = "Used " .. selected.Name, Duration = 2})
+                            task.wait(1.5)
+                            -- Start Dungeon
+                            DungeonRemotePath:FireServer("Start Dungeon")
+                            task.wait(5)
+                        else
+                            Fluent:Notify({Title = "Warning", Content = "No Tickets Left!", Duration = 5})
+                            -- ไม่ปิด AutoDungeon เพื่อให้มันเช็คเรื่อยๆ หรือจะให้ปิดก็ได้ถ้าต้องการ
+                            task.wait(5) 
+                        end
+                    end
+                end
+            else
+                -- [STATE: IN DUNGEON]
                 local npc = Workspace:FindFirstChild("NPCS") and Workspace.NPCS:FindFirstChild("DeathTapz")
                 if npc then
-                    char.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 4)
-                    LookAtTarget(npc.HumanoidRootPart)
-                    task.wait(0.5)
-                    for _, v in pairs(npc:GetDescendants()) do
-                        if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end
+                    local char = LocalPlayer.Character
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        char.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 4)
+                        LookAtTarget(npc.HumanoidRootPart)
+                        task.wait(0.5)
+                        for _, v in pairs(npc:GetDescendants()) do
+                            if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end
+                        end
                     end
                 end
-            end
-            task.wait(2)
-            
-            local pGui = LocalPlayer:FindFirstChild("PlayerGui")
-            if pGui then
-                local gui = pGui:FindFirstChild("Dungeon")
-                if gui and gui.Enabled then
-                    local btn = gui.Frames.Dungeon.Back.Start
-                    if btn then
-                         VirtualInputManager:SendMouseButtonEvent(btn.AbsolutePosition.X+20, btn.AbsolutePosition.Y+20, 0, true, game, 1)
-                         task.wait(0.1)
-                         VirtualInputManager:SendMouseButtonEvent(btn.AbsolutePosition.X+20, btn.AbsolutePosition.Y+20, 0, false, game, 1)
-                    end
-                end
-            end
-            
-            local timeout = 0
-            repeat
-                if not Config.AutoDungeon then break end
-                task.wait(1)
-                timeout = timeout + 1
-            until (Workspace:FindFirstChild("Floors") and Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NextGate")) or timeout > 60
 
-            if timeout <= 60 then
-                task.wait(2)
+                local timeout = 0
+                repeat
+                    if not Config.AutoDungeon then break end
+                    task.wait(1)
+                    timeout = timeout + 1
+                    if Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NextGate") then break end
+                until timeout > 2
+
                 Remote:FireServer("Towers:OpenGate")
+                task.wait(1)
             end
-            task.wait(5)
+            task.wait(1)
         end
     end)
 end
 
--- [6] Auto Farm (Strict Clear + Cooldown)
+-- [6] Auto Farm
 function ToggleAntiGravity(state)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -338,8 +344,15 @@ end
 -- =========================================================
 
 -- Tab 1: Dungeon
-local SectionDungeon = Tabs.Main:AddSection("Lobby Loop")
-local ToggleDungeon = Tabs.Main:AddToggle("AutoDungeonToggle", {Title = "Auto Start Dungeon", Default = false })
+local SectionDungeon = Tabs.Main:AddSection("Dungeon Settings")
+local DropdownRank = Tabs.Main:AddDropdown("RankSelect", {
+    Title = "Select Dungeon Rank",
+    Values = {"B", "A", "S", "SS"},
+    Multi = false,
+    Default = 1
+})
+DropdownRank:OnChanged(function(V) Config.SelectedDungeonRank = V end)
+local ToggleDungeon = Tabs.Main:AddToggle("AutoDungeonToggle", {Title = "Auto Dungeon (Loop)", Default = false })
 ToggleDungeon:OnChanged(function() Config.AutoDungeon = ToggleDungeon.Value; if Config.AutoDungeon then RunAutoDungeon() end end)
 local SectionStorage = Tabs.Main:AddSection("Inventory Manager")
 local ToggleStorage = Tabs.Main:AddToggle("AutoStorageToggle", {Title = "Auto Store Items (1-12)", Default = false })
@@ -372,16 +385,26 @@ local DropdownTP = Tabs.Teleport:AddDropdown("TPSelect", {
     Default = 1
 })
 DropdownTP:OnChanged(function(V) Config.SelectedTP = V end)
-
 Tabs.Teleport:AddButton({
     Title = "Teleport Now",
     Description = "Teleport to selected location immediately",
     Callback = function() ExecuteTeleport() end
 })
 
+-- =========================================================
+-- SAVE MANAGER SETUP (KEY PART)
+-- =========================================================
 SaveManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings() -- ไม่ต้องเซฟธีมสี (หรือจะเอาก็ลบบรรทัดนี้ออก)
+SaveManager:SetIgnoreIndexes({}) -- ไม่ยกเว้นอะไรเลย เซฟหมด
+SaveManager:BuildConfigSection(Tabs.Settings) -- สร้างหน้าเมนูเซฟ
+
 InterfaceManager:SetLibrary(Fluent)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-Window:SelectTab(2) -- กลับมาหน้า Farm เป็นหน้าหลัก
 
-Fluent:Notify({Title = "JEM HUB", Content = "Effects Deleted Successfully!", Duration = 5})
+Window:SelectTab(1)
+
+-- **สั่งให้โหลด Config อัตโนมัติ (ถ้าตั้งไว้)**
+SaveManager:LoadAutoloadConfig()
+
+Fluent:Notify({Title = "JEM HUB", Content = "Script Loaded + Save System Ready!", Duration = 5})
