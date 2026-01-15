@@ -1,5 +1,5 @@
 -- =========================================================
--- JEM HUB: THE TOWER (STRICT CLEAR + COOLDOWN FIX)
+-- JEM HUB: THE TOWER (STRICT CLEAR + COOLDOWN FIX + STORAGE)
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local Window = Fluent:CreateWindow({
     Title = "JEM HUB " .. Fluent.Version,
     SubTitle = "by Senior Lua (Strict Clear)",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
+    Size = UDim2.fromOffset(580, 500), -- ขยายหน้าจอลงมานิดนึงให้พอดีปุ่ม
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
@@ -32,6 +32,7 @@ local Config = {
     AutoFarmMob = false,
     AuraKill = false,
     AutoAbility = false,
+    AutoStorage = false, -- [NEW] เพิ่มตัวแปรเก็บของ
     SkillDelay = 0, 
     NoEffect = false,
     HideDamage = false,
@@ -179,7 +180,7 @@ function RunAutoDungeon()
     end)
 end
 
--- [6] Auto Farm (แก้ใหม่: Strict Clear + Cooldown)
+-- [6] Auto Farm (Strict Clear + Cooldown)
 function ToggleAntiGravity(state)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -201,23 +202,20 @@ function RunAutoFarm()
     ToggleAntiGravity(true)
     task.spawn(function()
         while Config.AutoFarmMob do
-            task.wait() -- เช็คตลอดเวลา
+            task.wait() 
             local char = LocalPlayer.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
             
             local folder = Workspace:FindFirstChild(Config.MobFolder)
             local target = nil
-            local mobCount = 0 -- นับจำนวนมอนที่เหลือ
+            local mobCount = 0 
             local minDist = 9999
             
-            -- Step 1: สแกนหามอนทั้งหมดก่อน
             if folder then
                 for _, mob in pairs(folder:GetChildren()) do
                     if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
                         if Config.SelectedMob == "All" or mob.Name == Config.SelectedMob then
-                            mobCount = mobCount + 1 -- เจอ 1 ตัว นับไว้
-                            
-                            -- หาตัวใกล้สุดเหมือนเดิม
+                            mobCount = mobCount + 1 
                             local dist = (mob.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
                             if dist < minDist then
                                 minDist = dist
@@ -228,35 +226,22 @@ function RunAutoFarm()
                 end
             end
             
-            -- Step 2: ตัดสินใจ
             if mobCount > 0 and target then
-                -- [[ ยังมีมอนเหลืออยู่ (Count > 0) -> ห้ามไปยุ่งกับ NPC ]]
-                -- บินไปเกาะหัวมอนตัวนั้น
                 local targetPos = target.HumanoidRootPart.Position
                 local flyPos = CFrame.new(targetPos + Vector3.new(0, Config.HoverHeight, 0), targetPos)
                 char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame:Lerp(flyPos, 0.5)
                 char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position, targetPos)
             else
-                -- [[ มอนตายเกลี้ยงแล้ว (Count == 0) -> เตรียมหา NPC ]]
-                
-                -- ใส่ Cooldown ตรงนี้ตามที่ขอ (1.5 วินาที)
-                -- เพื่อไม่ให้มันวาร์ปปุบปับทันทีที่มอนตาย
                 task.wait(1.5) 
-                
-                -- เช็คอีกรอบว่ายังเปิดโปรอยู่ไหม + มอนยังไม่เกิดใหม่
                 if Config.AutoFarmMob then
                      for _, prompt in pairs(Workspace:GetDescendants()) do
                         if prompt:IsA("ProximityPrompt") and prompt.Enabled then
                             if prompt.Parent then
                                 local targetPart = prompt.Parent:IsA("Model") and prompt.Parent:FindFirstChild("HumanoidRootPart") or prompt.Parent
                                 if targetPart and targetPart:IsA("BasePart") then
-                                    -- วาร์ปไปจูบปาก
                                     char.HumanoidRootPart.CFrame = targetPart.CFrame
-                                    LookAtTarget(targetPart) -- หันกล้อง
-                                    
-                                    task.wait(0.3) -- รอเซิร์ฟเวอร์
-                                    
-                                    -- กดปุ่ม
+                                    LookAtTarget(targetPart)
+                                    task.wait(0.3)
                                     if fireproximityprompt then
                                         fireproximityprompt(prompt)
                                     else
@@ -264,8 +249,6 @@ function RunAutoFarm()
                                         task.wait(prompt.HoldDuration + 0.1)
                                         prompt:InputHoldEnd()
                                     end
-                                    
-                                    -- กดเสร็จแล้ว รออีกนิดกันมันพยายามกดรัวซ้ำ
                                     task.wait(1) 
                                 end
                             end
@@ -278,6 +261,31 @@ function RunAutoFarm()
     end)
 end
 
+-- [7] Auto Storage (New Request)
+function RunAutoStorage()
+    task.spawn(function()
+        local remote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItemStorageRemote")
+        while Config.AutoStorage do
+            -- หน่วงเวลา 1 วิก่อนเริ่มงานตามสั่ง
+            task.wait(1)
+
+            -- วนลูปยัดของ 12 ช่อง
+            for i = 1, 12 do
+                if not Config.AutoStorage then break end -- ถ้าปิดปุ่มกลางคันให้หยุด
+                
+                local args = { "ItemStorage" .. i }
+                remote:FireServer(unpack(args))
+                
+                -- หน่วงนิดนึงกันหลุด
+                task.wait(0.1) 
+            end
+
+            -- รอสักพักก่อนเช็ครอบใหม่ (เช่น 3 วิ) จะได้ไม่ Spam เกินไป
+            task.wait(3)
+        end
+    end)
+end
+
 -- =========================================================
 -- UI SETUP (Minified)
 -- =========================================================
@@ -285,6 +293,11 @@ end
 local SectionDungeon = Tabs.Main:AddSection("Lobby Loop")
 local ToggleDungeon = Tabs.Main:AddToggle("AutoDungeonToggle", {Title = "Auto Start Dungeon", Default = false })
 ToggleDungeon:OnChanged(function() Config.AutoDungeon = ToggleDungeon.Value; if Config.AutoDungeon then RunAutoDungeon() end end)
+
+-- [New Section] Storage
+local SectionStorage = Tabs.Main:AddSection("Inventory Manager")
+local ToggleStorage = Tabs.Main:AddToggle("AutoStorageToggle", {Title = "Auto Store Items (1-12)", Default = false })
+ToggleStorage:OnChanged(function() Config.AutoStorage = ToggleStorage.Value; if Config.AutoStorage then RunAutoStorage() end end)
 
 local SectionFarm = Tabs.Farm:AddSection("Attack & Skills")
 local ToggleAura = Tabs.Farm:AddToggle("AuraKillToggle", {Title = "Aura Kill (Blade)", Default = false })
@@ -309,6 +322,6 @@ DropdownMob:OnChanged(function(V) Config.SelectedMob = V end)
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-Window:SelectTab(2)
+Window:SelectTab(1)
 
-Fluent:Notify({Title = "JEM HUB", Content = "Strict Clear & Cooldown Added!", Duration = 5})
+Fluent:Notify({Title = "JEM HUB", Content = "Auto Storage Included!", Duration = 5})
