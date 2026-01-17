@@ -1,6 +1,6 @@
 -- =========================================================
--- LIZ HUB (VERSION 2.7.0 - FULL EXPANDED)
--- PART 1: SETUP & FUNCTIONS
+-- LIZ HUB (VERSION 2.8.0 - INF TOWER FIX)
+-- PART 1: SETUP
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local HttpService = game:GetService("HttpService")
 
 local Window = Fluent:CreateWindow({
     Title = "Liz HUB",
-    SubTitle = "Full Version (No Deposit)",
+    SubTitle = "Inf Tower Fixed",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 520),
     Acrylic = true,
@@ -18,14 +18,11 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.RightControl
 })
 
--- =========================================================
 -- VARIABLES
--- =========================================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
-
 local LocalPlayer = Players.LocalPlayer
 local Remote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Signal"):WaitForChild("RemoteEvent")
 
@@ -33,12 +30,10 @@ local Remote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Signal"):
 local DungeonRemotePath = ReplicatedStorage:WaitForChild("NEW37"):WaitForChild("DUNGEONS"):WaitForChild("DungeonEvent")
 local ItemRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItemRemote")
 
--- =========================================================
--- CONFIGURATION
--- =========================================================
+-- CONFIG
 local Config = {
     AutoDungeon = false,
-    AutoTower = false,
+    AutoTower = false, -- [UPDATED LOGIC]
     SelectedDungeonRank = "B",
     
     AutoFarm = false,
@@ -46,7 +41,7 @@ local Config = {
     
     AutoMadara = false,
     AutoItachi = false,
-    AutoUseDB = false, -- Auto Use Dragonball Only
+    AutoUseDB = false,
     
     SkillDelay = 0,
     OffVFX = false,
@@ -57,7 +52,7 @@ local Config = {
     SelectedTP = "Broly"
 }
 
--- ข้อมูล Ticket สำหรับลงดันเจี้ยน
+-- DATA
 local DungeonData = {
     ["B"] = { Name = "B Dungeon Ticket", Var = "BDTickets" },
     ["A"] = { Name = "A Dungeon Ticket", Var = "ADTickets" },
@@ -65,7 +60,6 @@ local DungeonData = {
     ["SS"] = { Name = "SS Dungeon Ticket", Var = "SSDTickets" }
 }
 
--- ข้อมูลพิกัด Teleport
 local TeleportData = {
     ["Broly"] = { TargetName = "Legendary Saiyan6", Coords = CFrame.new(1402, -3, 143) },
     ["Tanjiro"] = { TargetName = "Tanjiro", Coords = CFrame.new(1510, 17, -104) },
@@ -76,7 +70,7 @@ local TeleportData = {
     ["Shop"] = { TargetName = "Shop", Coords = CFrame.new(-829, 9, -1087) }
 }
 
--- สร้าง Tabs
+-- TABS
 local Tabs = {
     Main = Window:AddTab({ Title = "Auto Dungeon", Icon = "castle" }),
     Farm = Window:AddTab({ Title = "Auto Farm", Icon = "sword" }),
@@ -85,15 +79,10 @@ local Tabs = {
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
--- =========================================================
--- HELPER FUNCTIONS
--- =========================================================
-
--- ฟังก์ชันบิน (กันตก)
+-- FUNCTIONS
 function ToggleAntiGravity(state)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
     if state then
         if not char.HumanoidRootPart:FindFirstChild("JemAntiGravity") then
             local bv = Instance.new("BodyVelocity")
@@ -108,147 +97,73 @@ function ToggleAntiGravity(state)
     end
 end
 
--- ฟังก์ชันหันหน้าหาเป้าหมาย
 local function LookAtTarget(targetPart)
     if not targetPart then return end
     local cam = Workspace.CurrentCamera
     cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position)
 end
 
--- ฟังก์ชันหา Party ID อัตโนมัติ (สำหรับ Inf Tower)
 local function GetPartyID()
     local reiNew = LocalPlayer:FindFirstChild("ReiNew")
     if reiNew then
         for _, v in pairs(reiNew:GetChildren()) do
             if v:IsA("StringValue") and (v.Name:lower():match("party") or v.Name:lower():match("id")) then
-                if #v.Value > 10 then 
-                    return v.Value 
-                end
+                if #v.Value > 10 then return v.Value end
             end
         end
     end
-    
     local pv = LocalPlayer:FindFirstChild("PlayerValues")
     if pv then
         local party = pv:FindFirstChild("PartyID") or pv:FindFirstChild("SquadID")
         if party then return party.Value end
     end
-    
     return nil 
 end
 -- =========================================================
--- LIZ HUB (VERSION 2.7.0 - FULL EXPANDED)
+-- LIZ HUB (VERSION 2.8.0 - INF TOWER FIX)
 -- PART 2: LOOPS & UI
 -- =========================================================
 
--- 1. Loop: Reduce Lag & Off VFX
+-- Loop 1: System (Lag/VFX)
 task.spawn(function()
     while true do
-        -- Reduce Lag Logic
         if Config.ReduceLag then
-            pcall(function()
-                local pGui = LocalPlayer:FindFirstChild("PlayerGui")
-                if pGui then
-                    for _, gui in pairs(pGui:GetChildren()) do
-                        local name = gui.Name:lower()
-                        if name:match("damage") or name:match("indicator") then
-                            if gui:IsA("ScreenGui") or gui:IsA("BillboardGui") then gui.Enabled = false end
-                        end
-                    end
-                end
-            end)
+            pcall(function() for _, g in pairs(LocalPlayer.PlayerGui:GetChildren()) do if g.Name:lower():match("damage") or g.Name:lower():match("indicator") then g.Enabled = false end end end)
         else
-            -- Restore
-            pcall(function()
-                local pGui = LocalPlayer:FindFirstChild("PlayerGui")
-                if pGui then
-                    for _, gui in pairs(pGui:GetChildren()) do
-                        if gui.Name:lower():match("damage") then gui.Enabled = true end
-                    end
-                end
-            end)
+            pcall(function() for _, g in pairs(LocalPlayer.PlayerGui:GetChildren()) do if g.Name:lower():match("damage") then g.Enabled = true end end end)
         end
-
-        -- Off VFX Logic
         if Config.OffVFX then
-            pcall(function()
-                if LocalPlayer.Backpack:FindFirstChild("Scripts") then 
-                    LocalPlayer.Backpack.Scripts.NewModules:Destroy() 
-                end
-            end)
-            
-            for _, obj in pairs(Workspace:GetChildren()) do
-                if obj.Name:match("HitPart") or obj.Name:match("Splash") then 
-                    obj:Destroy() 
-                end
-            end
-            
-            local foldersToRemove = {"Particles", "NewEffects", "KevSFX", "VFX", "ReiNew"}
-            for _, name in pairs(foldersToRemove) do
-                if ReplicatedStorage:FindFirstChild(name) then 
-                    ReplicatedStorage[name]:Destroy() 
-                end
-            end
+            pcall(function() if LocalPlayer.Backpack:FindFirstChild("Scripts") then LocalPlayer.Backpack.Scripts.NewModules:Destroy() end end)
+            for _, o in pairs(Workspace:GetChildren()) do if o.Name:match("HitPart") or o.Name:match("Splash") then o:Destroy() end end
+            for _, n in pairs({"Particles", "NewEffects", "KevSFX", "VFX", "ReiNew"}) do if ReplicatedStorage:FindFirstChild(n) then ReplicatedStorage[n]:Destroy() end end
         end
         task.wait(1)
     end
 end)
 
--- 2. Loop: Combat & Skills
+-- Loop 2: Combat
 task.spawn(function()
     while true do
         local char = LocalPlayer.Character
-        
-        -- Auto Madara
-        if Config.AutoMadara then
-            ReplicatedStorage.Remotes.AbilityHandler:FireServer("MadaraFifth")
-        end
-        
-        -- Auto Itachi
-        if Config.AutoItachi and char and char:FindFirstChild("HumanoidRootPart") then
-            ReplicatedStorage.RemoteEvents.ItachiSusanooRibcageRemote:FireServer(
-                false,
-                char.HumanoidRootPart.Position,
-                char.HumanoidRootPart.CFrame,
-                1
-            )
-        end
-        
-        -- Aura Kill
-        if Config.AuraKill then
-            ReplicatedStorage.RemoteEvents.BladeCombatRemote:FireServer()
-        end
-        
-        -- Delay Control
-        if Config.SkillDelay > 0 then
-            task.wait(Config.SkillDelay)
-        else
-            task.wait(0.1) -- Fast Spam
-        end
+        if Config.AutoMadara then ReplicatedStorage.Remotes.AbilityHandler:FireServer("MadaraFifth") end
+        if Config.AutoItachi and char and char:FindFirstChild("HumanoidRootPart") then ReplicatedStorage.RemoteEvents.ItachiSusanooRibcageRemote:FireServer(false, char.HumanoidRootPart.Position, char.HumanoidRootPart.CFrame, 1) end
+        if Config.AuraKill then ReplicatedStorage.RemoteEvents.BladeCombatRemote:FireServer() end
+        task.wait(Config.SkillDelay > 0 and Config.SkillDelay or 0.1)
     end
 end)
 
--- 3. Loop: Auto Use Dragonball (Check Name Only)
+-- Loop 3: Auto Use DB
 task.spawn(function()
     while true do
         if Config.AutoUseDB then
             local bp = LocalPlayer:FindFirstChild("Backpack")
-            if bp then
-                for _, item in pairs(bp:GetChildren()) do
-                    if item.Name:lower():match("dragonball") then
-                        pcall(function()
-                            ItemRemote:FireServer(item.Name)
-                        end)
-                        task.wait(0.1)
-                    end
-                end
-            end
+            if bp then for _, item in pairs(bp:GetChildren()) do if item.Name:lower():match("dragonball") then pcall(function() ItemRemote:FireServer(item.Name) end) end end end
         end
         task.wait(1)
     end
 end)
 
--- 4. Loop: Auto Farm / Dungeon / Tower
+-- Loop 4: Main Logic (Farm/Dungeon/Tower)
 task.spawn(function()
     while true do
         local char = LocalPlayer.Character
@@ -256,38 +171,24 @@ task.spawn(function()
         -- [[ MODE: AUTO DUNGEON ]]
         if Config.AutoDungeon then
             if not Workspace:FindFirstChild("Floors") then
-                -- LOBBY: Use Ticket
                 local selected = DungeonData[Config.SelectedDungeonRank]
                 if selected and LocalPlayer.ReiNew[selected.Var].Value > 0 then
-                    DungeonRemotePath:FireServer("Use Dungeon Ticket", { selected.Name, selected.Var })
-                    task.wait(1.5)
-                    DungeonRemotePath:FireServer("Start Dungeon")
-                    task.wait(5)
+                    DungeonRemotePath:FireServer("Use Dungeon Ticket", { selected.Name, selected.Var }); task.wait(1.5); DungeonRemotePath:FireServer("Start Dungeon"); task.wait(5)
                 end
             else
-                -- IN DUNGEON: Find NPC -> Go Next
                 local npc = Workspace:FindFirstChild("NPCS") and Workspace.NPCS:FindFirstChild("DeathTapz")
                 if npc and char and char:FindFirstChild("HumanoidRootPart") then
                     char.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 4)
                     LookAtTarget(npc.HumanoidRootPart)
                     task.wait(0.5)
-                    for _, v in pairs(npc:GetDescendants()) do
-                        if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end
-                    end
+                    for _, v in pairs(npc:GetDescendants()) do if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end end
                 end
-                
-                -- Wait for gate
                 local timeout = 0
-                repeat 
-                    task.wait(1) 
-                    timeout = timeout + 1 
-                until timeout > 2 or (Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NextGate"))
-                
-                Remote:FireServer("Towers:OpenGate")
-                task.wait(1)
+                repeat task.wait(1); timeout = timeout + 1 until timeout > 2 or (Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NextGate"))
+                Remote:FireServer("Towers:OpenGate"); task.wait(1)
             end
 
-        -- [[ MODE: AUTO INF TOWER ]]
+        -- [[ MODE: AUTO INF TOWER (UPDATED) ]]
         elseif Config.AutoTower then
             ToggleAntiGravity(true)
             if char and char:FindFirstChild("HumanoidRootPart") then
@@ -296,41 +197,49 @@ task.spawn(function()
                     local npc = Workspace.NPCS:FindFirstChild("DeathTapz")
                     if npc then
                         char.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                        LookAtTarget(npc.HumanoidRootPart)
-                        task.wait(0.5)
-                        for _, v in pairs(npc:GetDescendants()) do
-                            if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end
-                        end
-                        task.wait(1)
-                        Remote:FireServer("Towers:StartTower", GetPartyID())
-                        task.wait(8)
+                        LookAtTarget(npc.HumanoidRootPart); task.wait(0.5)
+                        for _, v in pairs(npc:GetDescendants()) do if v:IsA("ProximityPrompt") then fireproximityprompt(v) break end end
+                        task.wait(1); Remote:FireServer("Towers:StartTower", GetPartyID()); task.wait(8)
                     end
                 else
-                    -- IN GAME: Kill or Next
+                    -- IN GAME: Priority 1 - Kill Mobs
                     local liveFolder = Workspace:FindFirstChild("Live")
                     local targetMob = nil
-                    
                     if liveFolder then
                         for _, mob in pairs(liveFolder:GetChildren()) do
                             if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
-                                targetMob = mob
-                                break
+                                targetMob = mob; break
                             end
                         end
                     end
                     
                     if targetMob then
-                        -- KILL
+                        -- Found Mob -> Kill
                         local tPos = targetMob.HumanoidRootPart.Position
                         char.HumanoidRootPart.CFrame = CFrame.new(tPos + Vector3.new(0, 12, 0), tPos)
                     else
-                        -- NEXT FLOOR (Interact)
-                        task.wait(0.5)
+                        -- No Mob -> Priority 2 - Go to NPC/Next Floor
+                        -- 1. Try Find NPC
+                        local floor0 = Workspace.Floors:FindFirstChild("0")
+                        local targetCFrame = nil
+                        
+                        if floor0 and floor0:FindFirstChild("NPC") then
+                            -- เจอ NPC ให้วาปไปหา NPC
+                            targetCFrame = floor0.NPC.CFrame
+                        else
+                            -- ไม่เจอ NPC ให้วาปไปพิกัดที่กำหนด
+                            targetCFrame = CFrame.new(495, 15, -73)
+                        end
+                        
+                        if targetCFrame then
+                            char.HumanoidRootPart.CFrame = targetCFrame
+                        end
+                        
+                        -- 2. Press E (Auto Interact)
+                        task.wait(0.2)
                         for _, prompt in pairs(Workspace:GetDescendants()) do
                             if prompt:IsA("ProximityPrompt") and prompt.Enabled and prompt.Parent then
-                                if (char.HumanoidRootPart.Position - prompt.Parent.Position).Magnitude < 500 then
-                                    char.HumanoidRootPart.CFrame = prompt.Parent.CFrame
-                                    task.wait(0.2)
+                                if (char.HumanoidRootPart.Position - prompt.Parent.Position).Magnitude < 20 then
                                     if fireproximityprompt then
                                         fireproximityprompt(prompt)
                                     else
@@ -338,10 +247,10 @@ task.spawn(function()
                                         task.wait(prompt.HoldDuration + 0.1)
                                         prompt:InputHoldEnd()
                                     end
-                                    task.wait(0.5)
                                 end
                             end
                         end
+                        task.wait(0.5)
                     end
                 end
             end
@@ -352,165 +261,43 @@ task.spawn(function()
             if char and char:FindFirstChild("HumanoidRootPart") then
                 local liveFolder = Workspace:FindFirstChild("Live")
                 local target, minDist = nil, 9999
-                
-                if liveFolder then
-                    for _, mob in pairs(liveFolder:GetChildren()) do
-                        if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
-                            local dist = (mob.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
-                            if dist < minDist then
-                                minDist = dist
-                                target = mob
-                            end
-                        end
-                    end
-                end
-                
-                if target then
-                    local tPos = target.HumanoidRootPart.Position
-                    char.HumanoidRootPart.CFrame = CFrame.new(tPos + Vector3.new(0, Config.HoverHeight, 0), tPos)
-                end
+                if liveFolder then for _, mob in pairs(liveFolder:GetChildren()) do if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then local dist = (mob.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude; if dist < minDist then minDist = dist; target = mob end end end end
+                if target then char.HumanoidRootPart.CFrame = CFrame.new(target.HumanoidRootPart.Position + Vector3.new(0, Config.HoverHeight, 0), target.HumanoidRootPart.Position) end
             end
         else
-            -- STOP ALL MOVEMENT
             ToggleAntiGravity(false)
         end
-        
         task.wait()
     end
 end)
 
--- =========================================================
--- UI CONSTRUCTION
--- =========================================================
-
--- Tab 1: Dungeon
+-- UI SETUP
 local SectionDungeon = Tabs.Main:AddSection("Dungeon Settings")
-Tabs.Main:AddDropdown("RankSelect", {
-    Title = "Select Dungeon Rank",
-    Values = {"B", "A", "S", "SS"},
-    Default = 1,
-    Callback = function(V) Config.SelectedDungeonRank = V end
-})
-Tabs.Main:AddToggle("AutoDungeonToggle", {
-    Title = "Auto Dungeon (Loop)",
-    Default = false,
-    Callback = function(V) Config.AutoDungeon = V end
-})
+Tabs.Main:AddDropdown("RankSelect", {Title="Select Dungeon Rank", Values={"B","A","S","SS"}, Default=1, Callback=function(V) Config.SelectedDungeonRank=V end})
+Tabs.Main:AddToggle("AutoDungeonToggle", {Title="Auto Dungeon", Default=false, Callback=function(V) Config.AutoDungeon=V end})
 
 local SectionTower = Tabs.Main:AddSection("Infinity Tower")
-Tabs.Main:AddToggle("AutoTowerToggle", {
-    Title = "Auto Inf Tower",
-    Default = false,
-    Callback = function(V) Config.AutoTower = V end
-})
+Tabs.Main:AddToggle("AutoTowerToggle", {Title="Auto Inf Tower (Fix NPC/Warp)", Default=false, Callback=function(V) Config.AutoTower=V end})
 
 local SectionItem = Tabs.Main:AddSection("Item Management")
-Tabs.Main:AddToggle("AutoUseDBToggle", {
-    Title = "Auto Use Dragonball",
-    Default = false,
-    Callback = function(V) Config.AutoUseDB = V end
-})
+Tabs.Main:AddToggle("AutoUseDBToggle", {Title="Auto Use Dragonball", Default=false, Callback=function(V) Config.AutoUseDB=V end})
 
--- Tab 2: Farm
 local SectionFarm = Tabs.Farm:AddSection("Attack & Skills")
-Tabs.Farm:AddToggle("AuraKillToggle", {
-    Title = "Aura Kill",
-    Default = false,
-    Callback = function(V) Config.AuraKill = V end
-})
-Tabs.Farm:AddToggle("AutoMadaraToggle", {
-    Title = "Auto Madara (Fifth)",
-    Default = false,
-    Callback = function(V) Config.AutoMadara = V end
-})
-Tabs.Farm:AddToggle("AutoItachiToggle", {
-    Title = "Auto Itachi (Ribcage)",
-    Default = false,
-    Callback = function(V) Config.AutoItachi = V end
-})
-Tabs.Farm:AddSlider("SkillSpeedSlider", {
-    Title = "Spam Delay",
-    Default = 0,
-    Min = 0,
-    Max = 1,
-    Rounding = 2,
-    Callback = function(V) Config.SkillDelay = V end
-})
+Tabs.Farm:AddToggle("AuraKillToggle", {Title="Aura Kill", Default=false, Callback=function(V) Config.AuraKill=V end})
+Tabs.Farm:AddToggle("AutoMadaraToggle", {Title="Auto Madara", Default=false, Callback=function(V) Config.AutoMadara=V end})
+Tabs.Farm:AddToggle("AutoItachiToggle", {Title="Auto Itachi", Default=false, Callback=function(V) Config.AutoItachi=V end})
+Tabs.Farm:AddSlider("SkillSpeedSlider", {Title="Spam Delay", Default=0, Min=0, Max=1, Rounding=2, Callback=function(V) Config.SkillDelay=V end})
+Tabs.Farm:AddToggle("AutoFarmToggle", {Title="Auto Farm All Mob", Default=false, Callback=function(V) Config.AutoFarm=V end})
 
-local SectionMovement = Tabs.Farm:AddSection("Movement")
-Tabs.Farm:AddToggle("AutoFarmToggle", {
-    Title = "Auto Farm All Mob",
-    Default = false,
-    Callback = function(V) Config.AutoFarm = V end
-})
-
--- Tab 3: Teleport
 local SectionTP = Tabs.Teleport:AddSection("Waypoints")
-Tabs.Teleport:AddDropdown("TPSelect", {
-    Title = "Select Destination",
-    Values = {"Broly", "Tanjiro", "Prestige NPC", "Sukuna", "Zoro", "Cell", "Shop"},
-    Default = 1,
-    Callback = function(V) Config.SelectedTP = V end
-})
-Tabs.Teleport:AddButton({
-    Title = "Teleport Now",
-    Callback = function() 
-        local data = TeleportData[Config.SelectedTP]
-        local target = Workspace.ChatParts:FindFirstChild(data.TargetName) or Workspace.Live:FindFirstChild(data.TargetName)
-        
-        if target then
-            if target:IsA("Model") then
-                LocalPlayer.Character.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
-            else
-                LocalPlayer.Character.HumanoidRootPart.CFrame = target.CFrame
-            end
-        else
-            LocalPlayer.Character.HumanoidRootPart.CFrame = data.Coords
-        end
-    end
-})
+Tabs.Teleport:AddDropdown("TPSelect", {Title="Destination", Values={"Broly","Tanjiro","Prestige NPC","Sukuna","Zoro","Cell","Shop"}, Default=1, Callback=function(V) Config.SelectedTP=V end})
+Tabs.Teleport:AddButton({Title="Teleport Now", Callback=function() local d=TeleportData[Config.SelectedTP]; local t=Workspace.ChatParts:FindFirstChild(d.TargetName) or Workspace.Live:FindFirstChild(d.TargetName); if t then LocalPlayer.Character.HumanoidRootPart.CFrame=(t:IsA("Model") and t.HumanoidRootPart.CFrame or t.CFrame) else LocalPlayer.Character.HumanoidRootPart.CFrame=d.Coords end end})
 
--- Tab 4: Misc
 local SectionMisc = Tabs.Misc:AddSection("Miscellaneous")
-Tabs.Misc:AddToggle("AntiAFKToggle", {
-    Title = "Anti AFK",
-    Default = false,
-    Callback = function(V)
-        Config.AntiAFK = V
-        if V then
-            LocalPlayer.Idled:Connect(function()
-                if Config.AntiAFK then
-                    VirtualUser:CaptureController()
-                    VirtualUser:ClickButton2(Vector2.new())
-                end
-            end)
-        end
-    end
-})
-Tabs.Misc:AddToggle("OffVFXToggle", {
-    Title = "Off VFX (Clear Effects)",
-    Default = false,
-    Callback = function(V) Config.OffVFX = V end
-})
-Tabs.Misc:AddToggle("ReduceLagToggle", {
-    Title = "Reduce Lag (Hide Dmg)",
-    Default = false,
-    Callback = function(V) Config.ReduceLag = V end
-})
+Tabs.Misc:AddToggle("AntiAFKToggle", {Title="Anti AFK", Default=false, Callback=function(V) Config.AntiAFK=V; if V then LocalPlayer.Idled:Connect(function() if Config.AntiAFK then VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end end) end end})
+Tabs.Misc:AddToggle("OffVFXToggle", {Title="Off VFX", Default=false, Callback=function(V) Config.OffVFX=V end})
+Tabs.Misc:AddToggle("ReduceLagToggle", {Title="Reduce Lag", Default=false, Callback=function(V) Config.ReduceLag=V end})
 
--- Settings
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-SaveManager:BuildConfigSection(Tabs.Settings)
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-
-Window:SelectTab(1)
-SaveManager:LoadAutoloadConfig()
-
-Fluent:Notify({
-    Title = "Liz HUB",
-    Content = "Full Version 2.7.0 Loaded!",
-    Duration = 5
-})
+SaveManager:SetLibrary(Fluent); InterfaceManager:SetLibrary(Fluent); SaveManager:IgnoreThemeSettings(); SaveManager:SetIgnoreIndexes({}); SaveManager:BuildConfigSection(Tabs.Settings); InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+Window:SelectTab(1); SaveManager:LoadAutoloadConfig()
+Fluent:Notify({Title="Liz HUB", Content="Inf Tower NPC/Warp Fix Loaded!", Duration=5})
