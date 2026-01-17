@@ -1,5 +1,5 @@
 -- =========================================================
--- LIZ HUB (VERSION 2.8.0 - INF TOWER FIX)
+-- LIZ HUB (VERSION 2.15.0 - FULL VERSION + NEW INF TOWER)
 -- PART 1: SETUP
 -- =========================================================
 
@@ -10,7 +10,7 @@ local HttpService = game:GetService("HttpService")
 
 local Window = Fluent:CreateWindow({
     Title = "Liz HUB",
-    SubTitle = "Inf Tower Fixed",
+    SubTitle = "Full + New Inf Logic",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 520),
     Acrylic = true,
@@ -33,7 +33,7 @@ local ItemRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("
 -- CONFIG
 local Config = {
     AutoDungeon = false,
-    AutoTower = false, -- [UPDATED LOGIC]
+    AutoTower = false, -- [UPDATED LOGIC HERE]
     SelectedDungeonRank = "B",
     
     AutoFarm = false,
@@ -112,15 +112,10 @@ local function GetPartyID()
             end
         end
     end
-    local pv = LocalPlayer:FindFirstChild("PlayerValues")
-    if pv then
-        local party = pv:FindFirstChild("PartyID") or pv:FindFirstChild("SquadID")
-        if party then return party.Value end
-    end
     return nil 
 end
 -- =========================================================
--- LIZ HUB (VERSION 2.13.0 - TARGET FIX)
+-- LIZ HUB (VERSION 2.15.0 - FULL VERSION + NEW INF TOWER)
 -- PART 2: LOOPS & UI
 -- =========================================================
 
@@ -146,12 +141,8 @@ task.spawn(function()
     while true do
         local char = LocalPlayer.Character
         if Config.AutoMadara then ReplicatedStorage.Remotes.AbilityHandler:FireServer("MadaraFifth") end
-        if Config.AutoItachi and char and char:FindFirstChild("HumanoidRootPart") then 
-            ReplicatedStorage.RemoteEvents.ItachiSusanooRibcageRemote:FireServer(false, char.HumanoidRootPart.Position, char.HumanoidRootPart.CFrame, 1) 
-        end
-        if Config.AuraKill then 
-            ReplicatedStorage.RemoteEvents.BladeCombatRemote:FireServer() 
-        end
+        if Config.AutoItachi and char and char:FindFirstChild("HumanoidRootPart") then ReplicatedStorage.RemoteEvents.ItachiSusanooRibcageRemote:FireServer(false, char.HumanoidRootPart.Position, char.HumanoidRootPart.CFrame, 1) end
+        if Config.AuraKill then ReplicatedStorage.RemoteEvents.BladeCombatRemote:FireServer() end
         task.wait(Config.SkillDelay > 0 and Config.SkillDelay or 0.1)
     end
 end)
@@ -167,12 +158,6 @@ task.spawn(function()
     end
 end)
 
--- Helper: Find Target Part (Better Version)
-local function GetTargetPart(model)
-    if not model then return nil end
-    return model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model.PrimaryPart
-end
-
 -- Loop 4: MAIN LOGIC
 task.spawn(function()
     while true do
@@ -180,78 +165,81 @@ task.spawn(function()
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         
         if hrp then
-            -- [[ MODE: AUTO DUNGEON ]]
+            
+            -- [[ 1. AUTO DUNGEON (Original) ]]
             if Config.AutoDungeon then
                 if not Workspace:FindFirstChild("Floors") then
                     local selected = DungeonData[Config.SelectedDungeonRank]
                     if selected and LocalPlayer.ReiNew[selected.Var].Value > 0 then
-                        local dr = ReplicatedStorage:FindFirstChild("NEW37"):FindFirstChild("DUNGEONS"):FindFirstChild("DungeonEvent")
-                        if dr then
-                            dr:FireServer("Use Dungeon Ticket", { selected.Name, selected.Var }); task.wait(1.5); dr:FireServer("Start Dungeon"); task.wait(5)
-                        end
+                        DungeonRemotePath:FireServer("Use Dungeon Ticket", { selected.Name, selected.Var }); task.wait(1.5); DungeonRemotePath:FireServer("Start Dungeon"); task.wait(5)
                     end
                 else
-                    -- Dungeon Logic (รอแก้ถ้าจำเป็น)
+                    -- Dungeon Farm Logic (Using default farm below or specific)
                 end
 
-            -- [[ MODE: AUTO INF TOWER (FIXED TARGETING) ]]
+            -- [[ 2. AUTO INF TOWER (NEW LOGIC) ]]
             elseif Config.AutoTower then
                 ToggleAntiGravity(true)
                 
-                -- STEP 1: หา Mobs (Priority สูงสุด)
-                local liveFolder = Workspace:FindFirstChild("Live")
-                local targetMob = nil
-                local targetPart = nil
-                
-                if liveFolder then
-                    -- วนลูปเช็คเด็กในโฟลเดอร์ Live (เช่น Live:GetChildren()[4])
-                    for _, mob in pairs(liveFolder:GetChildren()) do
-                        if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
-                            -- พยายามหาชิ้นส่วนที่จะวาร์ปไปหา (RootPart/Torso)
-                            targetPart = GetTargetPart(mob)
-                            if targetPart then
+                -- เช็ค: ถ้าไม่มี Floors แปลว่าอยู่ Lobby
+                if not Workspace:FindFirstChild("Floors") then
+                    -- [LOBBY PHASE]
+                    -- ไปหา NPC -> กด E -> จบ (รอคนกด Start)
+                    local npc = Workspace.NPCS:FindFirstChild("DeathTapz")
+                    if npc then
+                        hrp.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                        LookAtTarget(npc.HumanoidRootPart)
+                        task.wait(0.5)
+                        
+                        -- กด E เปิดหน้าต่าง
+                        for _, v in pairs(npc:GetDescendants()) do 
+                            if v:IsA("ProximityPrompt") then fireproximityprompt(v) end 
+                        end
+                        task.wait(1)
+                    end
+                else
+                    -- [GAME PHASE]
+                    
+                    -- Step A: หา Mobs (Priority 1)
+                    local liveFolder = Workspace:FindFirstChild("Live")
+                    local targetMob = nil
+                    
+                    if liveFolder then
+                        for _, mob in pairs(liveFolder:GetChildren()) do
+                            if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
                                 targetMob = mob
-                                break -- เจอตัวเป็นๆ แล้ว ลุย!
+                                break -- เจอแล้วล็อคเป้า
                             end
                         end
                     end
-                end
-                
-                if targetMob and targetPart then
-                    -- [KILL PHASE]
-                    hrp.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, Config.HoverHeight, 0), targetPart.Position)
-                else
-                    -- [NEXT PHASE] ไม่มีมอน -> ไปหา NPC หรือ จุดวาร์ป
                     
-                    if not Workspace:FindFirstChild("Floors") then
-                        -- LOBBY
-                        local npc = Workspace.NPCS:FindFirstChild("DeathTapz")
-                        if npc then
-                            hrp.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                            LookAtTarget(npc.HumanoidRootPart)
-                            task.wait(0.5)
-                            for _, v in pairs(npc:GetDescendants()) do if v:IsA("ProximityPrompt") then fireproximityprompt(v) end end
-                            task.wait(1)
-                        end
+                    if targetMob then
+                        -- มีมอน -> ฆ่า
+                        local tPos = targetMob.HumanoidRootPart.Position
+                        hrp.CFrame = CFrame.new(tPos + Vector3.new(0, Config.HoverHeight, 0), tPos)
                     else
-                        -- IN GAME (Next Floor)
-                        local floor0 = Workspace.Floors:FindFirstChild("0")
-                        local targetCFrame = nil
+                        -- ไม่มีมอน -> ไปหา NPC ชั้น 0 (Priority 2)
+                        local targetNPC = nil
                         
-                        if floor0 and floor0:FindFirstChild("NPC") then
-                             targetCFrame = floor0.NPC.CFrame
-                        else
-                             targetCFrame = CFrame.new(495, 15, -73)
+                        -- ค้นหา NPC ใน Floors["0"] ตามที่ขอ
+                        if Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NPC") then
+                            targetNPC = Workspace.Floors["0"].NPC
                         end
                         
-                        if targetCFrame then hrp.CFrame = targetCFrame end
-                        
-                        -- กด E
-                        task.wait(0.1)
-                        for _, prompt in pairs(Workspace:GetDescendants()) do
-                            if prompt:IsA("ProximityPrompt") and prompt.Enabled and prompt.Parent then
-                                if (hrp.Position - prompt.Parent.Position).Magnitude < 25 then
-                                    if fireproximityprompt then fireproximityprompt(prompt) else prompt:InputHoldBegin(); task.wait(prompt.HoldDuration + 0.1); prompt:InputHoldEnd() end
+                        if targetNPC then
+                            -- วาร์ปไปสิง NPC
+                            hrp.CFrame = targetNPC.CFrame
+                            
+                            -- กด E
+                            task.wait(0.1)
+                            if targetNPC:FindFirstChild("ProximityPrompt") then
+                                fireproximityprompt(targetNPC.ProximityPrompt)
+                            end
+                        else
+                            -- เผื่อหาไม่เจอ ลองสแกน Prompt ใกล้ๆ
+                            for _, p in pairs(Workspace:GetDescendants()) do
+                                if p:IsA("ProximityPrompt") and p.Parent and (hrp.Position - p.Parent.Position).Magnitude < 20 then
+                                    fireproximityprompt(p)
                                 end
                             end
                         end
@@ -259,28 +247,26 @@ task.spawn(function()
                     end
                 end
 
-            -- [[ MODE: AUTO FARM ALL MOB (Target Fix) ]]
+            -- [[ 3. AUTO FARM ALL MOB (Original) ]]
             elseif Config.AutoFarm then
                 ToggleAntiGravity(true)
                 local liveFolder = Workspace:FindFirstChild("Live")
                 local targetMob = nil
-                local targetPart = nil
                 
                 if liveFolder then
                     for _, mob in pairs(liveFolder:GetChildren()) do
-                        if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
-                            targetPart = GetTargetPart(mob)
-                            if targetPart then
-                                targetMob = mob
-                                break
-                            end
+                        if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
+                            targetMob = mob
+                            break
                         end
                     end
                 end
                 
-                if targetMob and targetPart then
-                    hrp.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, Config.HoverHeight, 0), targetPart.Position)
+                if targetMob then
+                    local tPos = targetMob.HumanoidRootPart.Position
+                    hrp.CFrame = CFrame.new(tPos + Vector3.new(0, Config.HoverHeight, 0), tPos)
                 end
+
             else
                 ToggleAntiGravity(false)
             end
@@ -295,7 +281,7 @@ Tabs.Main:AddDropdown("RankSelect", {Title="Select Dungeon Rank", Values={"B","A
 Tabs.Main:AddToggle("AutoDungeonToggle", {Title="Auto Dungeon", Default=false, Callback=function(V) Config.AutoDungeon=V end})
 
 local SectionTower = Tabs.Main:AddSection("Infinity Tower")
-Tabs.Main:AddToggle("AutoTowerToggle", {Title="Auto Inf Tower (Better Target)", Default=false, Callback=function(V) Config.AutoTower=V end})
+Tabs.Main:AddToggle("AutoTowerToggle", {Title="Auto Inf Tower (New Logic)", Default=false, Callback=function(V) Config.AutoTower=V end})
 
 local SectionItem = Tabs.Main:AddSection("Item Management")
 Tabs.Main:AddToggle("AutoUseDBToggle", {Title="Auto Use Dragonball", Default=false, Callback=function(V) Config.AutoUseDB=V end})
@@ -318,4 +304,4 @@ Tabs.Misc:AddToggle("ReduceLagToggle", {Title="Reduce Lag", Default=false, Callb
 
 SaveManager:SetLibrary(Fluent); InterfaceManager:SetLibrary(Fluent); SaveManager:IgnoreThemeSettings(); SaveManager:SetIgnoreIndexes({}); SaveManager:BuildConfigSection(Tabs.Settings); InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 Window:SelectTab(1); SaveManager:LoadAutoloadConfig()
-Fluent:Notify({Title="Liz HUB", Content="Target Fix v2.13.0 Loaded!", Duration=5})
+Fluent:Notify({Title="Liz HUB", Content="Full Version + New Inf Logic!", Duration=5})
