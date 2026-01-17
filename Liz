@@ -1,5 +1,5 @@
 -- =========================================================
--- LIZ HUB (VERSION 1.1.0)
+-- LIZ HUB (VERSION 1.3.0 - DUAL SKILL SPAM)
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -8,9 +8,9 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 
 local Window = Fluent:CreateWindow({
     Title = "Liz HUB",
-    SubTitle = "", -- เอาออกตามสั่ง
+    SubTitle = "",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
+    Size = UDim2.fromOffset(580, 500),
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
@@ -31,13 +31,17 @@ local DungeonRemotePath = ReplicatedStorage:WaitForChild("NEW37"):WaitForChild("
 local Config = {
     AutoDungeon = false,
     SelectedDungeonRank = "B",
-    AutoFarm = false, -- เปลี่ยนชื่อตัวแปร
+    AutoFarm = false, 
     AuraKill = false,
-    AutoAbility = false,
+    
+    -- [NEW] แยกตัวแปร Madara กับ Itachi
+    AutoMadara = false, 
+    AutoItachi = false,
+    
     SkillDelay = 0,
-    OffVFX = false,    -- ชื่อใหม่
-    ReduceLag = false, -- ชื่อใหม่
-    AntiAFK = false,   -- เพิ่มใหม่
+    OffVFX = false,    
+    ReduceLag = false, 
+    AntiAFK = false,   
     HoverHeight = 12,
     SelectedTP = "Broly"
 }
@@ -50,7 +54,7 @@ local DungeonData = {
     ["SS"] = { Name = "SS Dungeon Ticket", Var = "SSDTickets" }
 }
 
--- ข้อมูล Teleport (ชื่อ NPC สำหรับค้นหา และ พิกัดสำรอง)
+-- ข้อมูล Teleport
 local TeleportData = {
     ["Broly"] = { TargetName = "Legendary Saiyan6", Coords = CFrame.new(1402, -3, 143) },
     ["Tanjiro"] = { TargetName = "Tanjiro", Coords = CFrame.new(1510, 17, -104) },
@@ -58,14 +62,14 @@ local TeleportData = {
     ["Sukuna"] = { TargetName = "Sukuna", Coords = CFrame.new(870, 122, 526) },
     ["Zoro"] = { TargetName = "Zoro (PTS)", Coords = CFrame.new(557, 5, -182) },
     ["Cell"] = { TargetName = "Cell", Coords = CFrame.new(1094, 21, -912) },
-    ["Shop"] = { TargetName = "Shop", Coords = CFrame.new(-829, 9, -1087) }, -- เก็บไว้เผื่อใช้
+    ["Shop"] = { TargetName = "Shop", Coords = CFrame.new(-829, 9, -1087) },
 }
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Auto Dungeon", Icon = "castle" }),
     Farm = Window:AddTab({ Title = "Auto Farm", Icon = "sword" }),
     Teleport = Window:AddTab({ Title = "Teleport", Icon = "map" }),
-    Misc = Window:AddTab({ Title = "Misc", Icon = "component" }), -- แท็บใหม่
+    Misc = Window:AddTab({ Title = "Misc", Icon = "component" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
@@ -73,14 +77,14 @@ local Tabs = {
 -- LOGIC FUNCTIONS
 -- =========================================================
 
--- Helper: หันกล้อง
+-- Helper
 local function LookAtTarget(targetPart)
     if not targetPart then return end
     local cam = Workspace.CurrentCamera
     cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position)
 end
 
--- [1] Reduce Lag (Hide Damage)
+-- [1] Reduce Lag
 function RunReduceLag()
     task.spawn(function()
         while Config.ReduceLag do
@@ -95,7 +99,6 @@ function RunReduceLag()
             end
             task.wait(1)
         end
-        -- Restore
         local pGui = LocalPlayer:FindFirstChild("PlayerGui")
         if pGui then
             for _, gui in pairs(pGui:GetChildren()) do
@@ -105,7 +108,7 @@ function RunReduceLag()
     end)
 end
 
--- [2] Off VFX (Clear Effect)
+-- [2] Off VFX
 function RunOffVFX()
     task.spawn(function()
         while Config.OffVFX do
@@ -134,13 +137,35 @@ function RunOffVFX()
     end)
 end
 
--- [3] Auto Ability
-function RunAutoAbility()
+-- [3.1] Auto Madara
+function RunAutoMadara()
     task.spawn(function()
         local r = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("AbilityHandler")
         local args = { "MadaraFifth" }
-        while Config.AutoAbility do
+        while Config.AutoMadara do
             r:FireServer(unpack(args))
+            if Config.SkillDelay <= 0 then task.wait() else task.wait(Config.SkillDelay) end
+        end
+    end)
+end
+
+-- [3.2] Auto Itachi (Dynamic Position)
+function RunAutoItachi()
+    task.spawn(function()
+        local r = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItachiSusanooRibcageRemote")
+        while Config.AutoItachi do
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local hrp = char.HumanoidRootPart
+                -- อัปเดตพิกัดตามตัวละครเราตลอดเวลา
+                local args = {
+                    false,
+                    hrp.Position, 
+                    hrp.CFrame,   
+                    1
+                }
+                r:FireServer(unpack(args))
+            end
             if Config.SkillDelay <= 0 then task.wait() else task.wait(Config.SkillDelay) end
         end
     end)
@@ -162,9 +187,7 @@ function RunAutoDungeon()
     task.spawn(function()
         while Config.AutoDungeon do
             local inDungeon = Workspace:FindFirstChild("Floors") 
-            
             if not inDungeon then
-                -- [STATE: LOBBY]
                 local selected = DungeonData[Config.SelectedDungeonRank]
                 if selected then
                     local reiNew = LocalPlayer:FindFirstChild("ReiNew")
@@ -183,7 +206,6 @@ function RunAutoDungeon()
                     end
                 end
             else
-                -- [STATE: IN DUNGEON]
                 local npc = Workspace:FindFirstChild("NPCS") and Workspace.NPCS:FindFirstChild("DeathTapz")
                 if npc then
                     local char = LocalPlayer.Character
@@ -196,7 +218,6 @@ function RunAutoDungeon()
                         end
                     end
                 end
-
                 local timeout = 0
                 repeat
                     if not Config.AutoDungeon then break end
@@ -204,7 +225,6 @@ function RunAutoDungeon()
                     timeout = timeout + 1
                     if Workspace.Floors:FindFirstChild("0") and Workspace.Floors["0"]:FindFirstChild("NextGate") then break end
                 until timeout > 2
-
                 Remote:FireServer("Towers:OpenGate")
                 task.wait(1)
             end
@@ -213,7 +233,7 @@ function RunAutoDungeon()
     end)
 end
 
--- [6] Auto Farm (Updated: Farm All Mob)
+-- [6] Auto Farm
 function ToggleAntiGravity(state)
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -238,15 +258,12 @@ function RunAutoFarm()
             task.wait() 
             local char = LocalPlayer.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-            
-            local folder = Workspace:FindFirstChild("Live") -- บังคับหาใน Live เลย เพราะตีทุกตัว
+            local folder = Workspace:FindFirstChild("Live") 
             local target = nil
             local minDist = 9999
-            
             if folder then
                 for _, mob in pairs(folder:GetChildren()) do
                     if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
-                        -- ตัดเงื่อนไขเช็คชื่อออก (ตีหมด)
                         local dist = (mob.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
                         if dist < minDist then
                             minDist = dist
@@ -255,14 +272,12 @@ function RunAutoFarm()
                     end
                 end
             end
-            
             if target then
                 local targetPos = target.HumanoidRootPart.Position
                 local flyPos = CFrame.new(targetPos + Vector3.new(0, Config.HoverHeight, 0), targetPos)
                 char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame:Lerp(flyPos, 0.5)
                 char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position, targetPos)
             else
-                -- ถ้าไม่มีมอน ให้รอเฉยๆ ไม่ต้องไปยุ่งกับ NPC
                 task.wait(1)
             end
         end
@@ -270,43 +285,33 @@ function RunAutoFarm()
     end)
 end
 
--- [7] Smart Teleport (Find Name -> Else Coords)
+-- [7] Teleport
 function ExecuteTeleport()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
     local data = TeleportData[Config.SelectedTP]
     if not data then return end
-
-    -- 1. ลองหาจากชื่อก่อน (ใน Live หรือ ChatParts)
     local targetFound = nil
-    
-    -- หาใน ChatParts
     if Workspace:FindFirstChild("ChatParts") then
         local t = Workspace.ChatParts:FindFirstChild(data.TargetName)
         if t then targetFound = t end
     end
-    -- หาใน Live (เผื่อเป็นบอสที่เกิดแล้ว)
     if not targetFound and Workspace:FindFirstChild("Live") then
          local t = Workspace.Live:FindFirstChild(data.TargetName)
          if t then targetFound = t end
     end
-
     if targetFound then
-        -- ถ้าเจอตัวเป็นๆ วาร์ปไปหาเลย
         local dest = targetFound:IsA("Model") and targetFound:FindFirstChild("HumanoidRootPart") or targetFound
         if dest and dest:IsA("BasePart") then
             char.HumanoidRootPart.CFrame = dest.CFrame
-            Fluent:Notify({Title = "Teleport", Content = "Found NPC/Boss: " .. data.TargetName, Duration = 3})
+            Fluent:Notify({Title = "Teleport", Content = "Found NPC: " .. data.TargetName, Duration = 3})
         else
-            -- กรณีเป็น Model แต่หา Part ไม่เจอ ให้ใช้วิธี Coords แทน
             char.HumanoidRootPart.CFrame = data.Coords
-            Fluent:Notify({Title = "Teleport", Content = "Target found but invalid, using Coords.", Duration = 3})
+            Fluent:Notify({Title = "Teleport", Content = "Using Coordinates", Duration = 3})
         end
     else
-        -- 2. ถ้าไม่เจอตัว ใช้วิธีวาร์ปไปพิกัด
         char.HumanoidRootPart.CFrame = data.Coords
-        Fluent:Notify({Title = "Teleport", Content = "Target missing, warped to Coordinates.", Duration = 3})
+        Fluent:Notify({Title = "Teleport", Content = "Warped to Coordinates", Duration = 3})
     end
 end
 
@@ -314,7 +319,7 @@ end
 -- UI SETUP
 -- =========================================================
 
--- Tab 1: Auto Dungeon
+-- Tab 1: Dungeon
 local SectionDungeon = Tabs.Main:AddSection("Dungeon Settings")
 local DropdownRank = Tabs.Main:AddDropdown("RankSelect", {
     Title = "Select Dungeon Rank",
@@ -326,17 +331,22 @@ DropdownRank:OnChanged(function(V) Config.SelectedDungeonRank = V end)
 local ToggleDungeon = Tabs.Main:AddToggle("AutoDungeonToggle", {Title = "Auto Dungeon (Loop)", Default = false })
 ToggleDungeon:OnChanged(function() Config.AutoDungeon = ToggleDungeon.Value; if Config.AutoDungeon then RunAutoDungeon() end end)
 
--- Tab 2: Auto Farm
+-- Tab 2: Farm
 local SectionFarm = Tabs.Farm:AddSection("Attack & Skills")
-local ToggleAura = Tabs.Farm:AddToggle("AuraKillToggle", {Title = "Aura Kill", Default = false }) -- เปลี่ยนชื่อ
+local ToggleAura = Tabs.Farm:AddToggle("AuraKillToggle", {Title = "Aura Kill", Default = false })
 ToggleAura:OnChanged(function() Config.AuraKill = ToggleAura.Value; if Config.AuraKill then RunAuraKill() end end)
 
-local ToggleAbility = Tabs.Farm:AddToggle("AutoAbilityToggle", {Title = "Auto Ability (Madara)", Default = false })
-ToggleAbility:OnChanged(function() Config.AutoAbility = ToggleAbility.Value; if Config.AutoAbility then RunAutoAbility() end end)
-local SliderSkill = Tabs.Farm:AddSlider("SkillSpeedSlider", {Title = "Madara Spam Delay", Default = 0, Min = 0, Max = 1, Rounding = 2, Callback = function(V) Config.SkillDelay = V end})
+-- [NEW] Separate Toggles for Madara and Itachi
+local ToggleMadara = Tabs.Farm:AddToggle("AutoMadaraToggle", {Title = "Auto Madara (Fifth)", Default = false })
+ToggleMadara:OnChanged(function() Config.AutoMadara = ToggleMadara.Value; if Config.AutoMadara then RunAutoMadara() end end)
 
-local SectionAuto Farm = Tabs.Farm:AddSection("Auto Farm")
-local ToggleFarm = Tabs.Farm:AddToggle("AutoFarmToggle", {Title = "Auto Farm All Mob", Default = false }) -- เปลี่ยนชื่อ & ลบ Dropdown
+local ToggleItachi = Tabs.Farm:AddToggle("AutoItachiToggle", {Title = "Auto Itachi (Ribcage)", Default = false })
+ToggleItachi:OnChanged(function() Config.AutoItachi = ToggleItachi.Value; if Config.AutoItachi then RunAutoItachi() end end)
+
+local SliderSkill = Tabs.Farm:AddSlider("SkillSpeedSlider", {Title = "Spam Delay (Both)", Default = 0, Min = 0, Max = 1, Rounding = 2, Callback = function(V) Config.SkillDelay = V end})
+
+local SectionMovement = Tabs.Farm:AddSection("Movement")
+local ToggleFarm = Tabs.Farm:AddToggle("AutoFarmToggle", {Title = "Auto Farm All Mob", Default = false })
 ToggleFarm:OnChanged(function() Config.AutoFarm = ToggleFarm.Value; if Config.AutoFarm then RunAutoFarm() else ToggleAntiGravity(false) end end)
 
 -- Tab 3: Teleport
@@ -354,9 +364,8 @@ Tabs.Teleport:AddButton({
     Callback = function() ExecuteTeleport() end
 })
 
--- Tab 4: Misc (New)
+-- Tab 4: Misc
 local SectionMisc = Tabs.Misc:AddSection("Miscellaneous")
-
 local ToggleAntiAFK = Tabs.Misc:AddToggle("AntiAFKToggle", {Title = "Anti AFK", Default = false })
 ToggleAntiAFK:OnChanged(function(state)
     Config.AntiAFK = state
@@ -369,16 +378,13 @@ ToggleAntiAFK:OnChanged(function(state)
         end)
         Fluent:Notify({Title = "Misc", Content = "Anti AFK Enabled!", Duration = 3})
     else
-        Fluent:Notify({Title = "Misc", Content = "Anti AFK Disabled! (Restart to fully stop)", Duration = 3})
+        Fluent:Notify({Title = "Misc", Content = "Anti AFK Disabled!", Duration = 3})
     end
 end)
-
 local ToggleOffVFX = Tabs.Misc:AddToggle("OffVFXToggle", {Title = "Off VFX (Clear Effects)", Default = false })
 ToggleOffVFX:OnChanged(function() Config.OffVFX = ToggleOffVFX.Value; if Config.OffVFX then RunOffVFX() end end)
-
 local ToggleReduceLag = Tabs.Misc:AddToggle("ReduceLagToggle", {Title = "Reduce Lag (Hide Dmg)", Default = false })
 ToggleReduceLag:OnChanged(function() Config.ReduceLag = ToggleReduceLag.Value; if Config.ReduceLag then RunReduceLag() end end)
-
 
 -- Settings
 SaveManager:SetLibrary(Fluent)
@@ -388,7 +394,7 @@ SaveManager:BuildConfigSection(Tabs.Settings)
 InterfaceManager:SetLibrary(Fluent)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 
-Window:SelectTab(1)
+Window:SelectTab(2)
 SaveManager:LoadAutoloadConfig()
 
-Fluent:Notify({Title = "Liz HUB", Content = "Version 1.1.0 Loaded!", Duration = 5})
+Fluent:Notify({Title = "Liz HUB", Content = "Madara & Itachi Added!", Duration = 5})
