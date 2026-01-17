@@ -335,7 +335,7 @@ local ToggleAbility = Tabs.Farm:AddToggle("AutoAbilityToggle", {Title = "Auto Ab
 ToggleAbility:OnChanged(function() Config.AutoAbility = ToggleAbility.Value; if Config.AutoAbility then RunAutoAbility() end end)
 local SliderSkill = Tabs.Farm:AddSlider("SkillSpeedSlider", {Title = "Madara Spam Delay", Default = 0, Min = 0, Max = 1, Rounding = 2, Callback = function(V) Config.SkillDelay = V end})
 
-local SectionMovement = Tabs.Farm:AddSection("Movement")
+local SectionAuto Farm = Tabs.Farm:AddSection("Auto Farm")
 local ToggleFarm = Tabs.Farm:AddToggle("AutoFarmToggle", {Title = "Auto Farm All Mob", Default = false }) -- เปลี่ยนชื่อ & ลบ Dropdown
 ToggleFarm:OnChanged(function() Config.AutoFarm = ToggleFarm.Value; if Config.AutoFarm then RunAutoFarm() else ToggleAntiGravity(false) end end)
 
