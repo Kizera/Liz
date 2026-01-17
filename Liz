@@ -1,10 +1,11 @@
 -- =========================================================
--- LIZ HUB (VERSION 1.7.0 - INF TOWER FULL LOOP)
+-- LIZ HUB (VERSION 1.9.0 - DRAGONBALL HUNTER)
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+local HttpService = game:GetService("HttpService")
 
 local Window = Fluent:CreateWindow({
     Title = "Liz HUB",
@@ -27,6 +28,9 @@ local LocalPlayer = Players.LocalPlayer
 local Remote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Signal"):WaitForChild("RemoteEvent")
 local DungeonRemotePath = ReplicatedStorage:WaitForChild("NEW37"):WaitForChild("DUNGEONS"):WaitForChild("DungeonEvent")
 
+local ItemStorageRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItemStorageRemote")
+local ItemRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItemRemote")
+
 local Config = {
     AutoDungeon = false,
     AutoTower = false,
@@ -36,6 +40,9 @@ local Config = {
     
     AutoMadara = false, 
     AutoItachi = false,
+    
+    AutoStorage = false,   
+    AutoUseDB = false,
     
     SkillDelay = 0,
     OffVFX = false,    
@@ -76,13 +83,6 @@ local Tabs = {
 -- LOGIC FUNCTIONS
 -- =========================================================
 
--- Helper: หันกล้อง
-local function LookAtTarget(targetPart)
-    if not targetPart then return end
-    local cam = Workspace.CurrentCamera
-    cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position)
-end
-
 -- [Helper] Anti Gravity
 function ToggleAntiGravity(state)
     local char = LocalPlayer.Character
@@ -101,30 +101,28 @@ function ToggleAntiGravity(state)
     end
 end
 
--- [Helper] Find Dynamic Party ID (สำคัญมาก)
+-- [Helper] LookAt
+local function LookAtTarget(targetPart)
+    if not targetPart then return end
+    local cam = Workspace.CurrentCamera
+    cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position)
+end
+
+-- [Helper] Find Party ID
 local function GetPartyID()
-    -- 1. ลองหาใน ReiNew ของตัวเอง (ปกติเก็บค่าต่างๆ ไว้ในนี้)
     local reiNew = LocalPlayer:FindFirstChild("ReiNew")
     if reiNew then
-        -- ลองหาตัวแปรที่ชื่อ Party, PartyID, Squad, หรือ Room
         for _, v in pairs(reiNew:GetChildren()) do
             if v:IsA("StringValue") and (v.Name:lower():find("party") or v.Name:lower():find("squad") or v.Name:lower():find("room") or v.Name:lower():find("id")) then
-                if #v.Value > 10 then -- UUID มักจะยาวๆ
-                    return v.Value
-                end
+                if #v.Value > 10 then return v.Value end
             end
         end
     end
-    
-    -- 2. ถ้าหาไม่เจอ ลองหาใน PlayerValues
     local pv = LocalPlayer:FindFirstChild("PlayerValues")
     if pv then
         local party = pv:FindFirstChild("PartyID") or pv:FindFirstChild("SquadID")
         if party then return party.Value end
     end
-
-    -- 3. ถ้ายังไม่เจออีก อาจจะเป็นไปได้ว่าส่ง nil ได้เลย (Solo) หรือต้องสร้างเอง
-    -- ลองส่ง nil ไปก่อน (สคริปต์ส่วนใหญ่ถ้า Solo ไม่ต้องใส่ ID)
     return nil 
 end
 
@@ -181,7 +179,7 @@ function RunOffVFX()
     end)
 end
 
--- [3.1] Auto Madara
+-- [3] Auto Madara
 function RunAutoMadara()
     task.spawn(function()
         local r = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("AbilityHandler")
@@ -193,7 +191,7 @@ function RunAutoMadara()
     end)
 end
 
--- [3.2] Auto Itachi
+-- [4] Auto Itachi
 function RunAutoItachi()
     task.spawn(function()
         local r = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItachiSusanooRibcageRemote")
@@ -209,7 +207,7 @@ function RunAutoItachi()
     end)
 end
 
--- [4] Aura Kill
+-- [5] Aura Kill
 function RunAuraKill()
     task.spawn(function()
         local r = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("BladeCombatRemote")
@@ -220,7 +218,59 @@ function RunAuraKill()
     end)
 end
 
--- [5] Auto Dungeon
+-- [6] SMART AUTO STORAGE (Flexible Match)
+function RunAutoStorage()
+    task.spawn(function()
+        while Config.AutoStorage do
+            task.wait(0.5) 
+            
+            local playerValues = LocalPlayer:FindFirstChild("PlayerValues")
+            if not playerValues then continue end
+
+            for i = 1, 12 do
+                if not Config.AutoStorage then break end
+                
+                local slotName = "ItemStorage" .. i
+                local slot = playerValues:FindFirstChild(slotName)
+                
+                if slot and slot.Value ~= "" and slot.Value ~= "empty" and slot.Value ~= "{}" then
+                    
+                    local success, itemData = pcall(function()
+                        return HttpService:JSONDecode(slot.Value)
+                    end)
+
+                    if success and itemData and itemData.name then
+                        -- [CONDITION] แปลงชื่อเป็นตัวเล็กทั้งหมด แล้วหาคำว่า dragonball
+                        -- แบบนี้จะจับได้หมด: "Six Star Dragonball", "One Star Dragonball", "DRAGONBALL"
+                        local lowerName = itemData.name:lower()
+                        
+                        if lowerName:find("dragonball") then
+                            -- == เจอดราก้อนบอล (ไม่ว่ากี่ดาว) ==
+                            if Config.AutoUseDB then
+                                pcall(function()
+                                    ItemRemote:FireServer(itemData.name)
+                                end)
+                            end
+                            -- ไม่ฝาก ข้ามไปเลย
+                        else
+                            -- == ไม่ใช่ดราก้อนบอล ==
+                            local args = { slotName }
+                            ItemStorageRemote:FireServer(unpack(args))
+                        end
+                    else
+                        -- แกะชื่อไม่ได้ ให้ฝากไปก่อน
+                        local args = { slotName }
+                        ItemStorageRemote:FireServer(unpack(args))
+                    end
+                end
+                task.wait(0.05)
+            end
+            task.wait(2) 
+        end
+    end)
+end
+
+-- [7] Auto Dungeon
 function RunAutoDungeon()
     task.spawn(function()
         while Config.AutoDungeon do
@@ -271,7 +321,7 @@ function RunAutoDungeon()
     end)
 end
 
--- [6] Auto Inf Tower (Lobby Loop + In-Game)
+-- [8] Auto Inf Tower
 function RunAutoTower()
     ToggleAntiGravity(true)
     task.spawn(function()
@@ -280,18 +330,13 @@ function RunAutoTower()
             local char = LocalPlayer.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
             
-            -- ตรวจสอบว่าอยู่ในดัน/หอ หรืออยู่ Lobby
-            local inTower = Workspace:FindFirstChild("Floors") -- ปกติถ้าเข้าดัน/หอ จะมี Folder นี้
+            local inTower = Workspace:FindFirstChild("Floors")
             
             if not inTower then
-                -- [STATE: LOBBY]
-                -- 1. วาร์ปไปหา DeathTapz (NPC หอ Inf)
                 local npc = Workspace:FindFirstChild("NPCS") and Workspace.NPCS:FindFirstChild("DeathTapz")
                 if npc then
                     char.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0,0,3)
                     LookAtTarget(npc.HumanoidRootPart)
-                    
-                    -- 2. กดคุย (Prompt) เพื่อสร้าง Party/Session (ถ้าจำเป็น)
                     task.wait(0.5)
                     for _, v in pairs(npc:GetDescendants()) do
                         if v:IsA("ProximityPrompt") then 
@@ -299,33 +344,19 @@ function RunAutoTower()
                             break 
                         end
                     end
-                    task.wait(1) -- รอ UI ขึ้น หรือ Party สร้าง
-
-                    -- 3. ยิง Remote Start (ค้นหา Party ID อัตโนมัติ)
+                    task.wait(1)
                     local partyID = GetPartyID()
-                    
-                    -- *ถ้าหา ID ไม่เจอ ลองส่งแบบไม่มี ID หรือส่ง String ว่างๆ (กันเหนียว)
-                    -- แต่ถ้าเกมบังคับ ID ตรงนี้อาจจะต้อง manual check อีกที
-                    local args = {
-                        "Towers:StartTower",
-                        partyID -- ส่ง ID ที่หาเจอ (หรือ nil)
-                    }
+                    local args = { "Towers:StartTower", partyID }
                     Remote:FireServer(unpack(args))
-                    
-                    Fluent:Notify({Title = "Inf Tower", Content = "Starting... (ID: " .. tostring(partyID) .. ")", Duration = 3})
-                    
-                    -- รอโหลดเข้าเกม (กัน Spam)
+                    Fluent:Notify({Title = "Inf Tower", Content = "Starting...", Duration = 3})
                     task.wait(8)
                 else
-                    Fluent:Notify({Title = "Error", Content = "DeathTapz NPC Not Found!", Duration = 5})
+                    Fluent:Notify({Title = "Error", Content = "NPC Not Found!", Duration = 5})
                     task.wait(5)
                 end
             else
-                -- [STATE: IN TOWER] (Logic เดิม)
                 local folder = Workspace:FindFirstChild("Live")
                 local targetMob = nil
-                
-                -- หา Boss/Mob
                 if folder then
                     for _, mob in pairs(folder:GetChildren()) do
                         if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
@@ -336,20 +367,16 @@ function RunAutoTower()
                 end
                 
                 if targetMob then
-                    -- ตีมอน
                     local targetPos = targetMob.HumanoidRootPart.Position
                     local flyPos = CFrame.new(targetPos + Vector3.new(0, 12, 0), targetPos)
                     char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame:Lerp(flyPos, 0.5)
                     char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position, targetPos)
                 else
-                    -- มอนหมด -> หาปุ่มไปต่อ
                     task.wait(0.5) 
                     if Config.AutoTower then
-                        local foundPrompt = false
                         for _, prompt in pairs(Workspace:GetDescendants()) do
                             if prompt:IsA("ProximityPrompt") and prompt.Enabled then
                                 if prompt.Parent and prompt.Parent:IsA("BasePart") then
-                                    -- เช็คระยะห่างหน่อย กันไปกดปุ่มมั่วที่ Lobby (แต่เราเช็ค inTower แล้วน่าจะปลอดภัย)
                                     if (char.HumanoidRootPart.Position - prompt.Parent.Position).Magnitude < 500 then
                                         char.HumanoidRootPart.CFrame = prompt.Parent.CFrame
                                         task.wait(0.2)
@@ -373,7 +400,7 @@ function RunAutoTower()
     end)
 end
 
--- [7] Auto Farm (Normal)
+-- [9] Auto Farm (Normal)
 function RunAutoFarm()
     ToggleAntiGravity(true)
     task.spawn(function()
@@ -408,7 +435,7 @@ function RunAutoFarm()
     end)
 end
 
--- [8] Teleport
+-- [10] Teleport
 function ExecuteTeleport()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -457,6 +484,14 @@ ToggleDungeon:OnChanged(function() Config.AutoDungeon = ToggleDungeon.Value; if 
 local SectionTower = Tabs.Main:AddSection("Infinity Tower Mode")
 local ToggleTower = Tabs.Main:AddToggle("AutoTowerToggle", {Title = "Auto Inf Tower", Default = false })
 ToggleTower:OnChanged(function() Config.AutoTower = ToggleTower.Value; if Config.AutoTower then RunAutoTower() else ToggleAntiGravity(false) end end)
+
+local SectionStorage = Tabs.Main:AddSection("Smart Inventory")
+local ToggleStorage = Tabs.Main:AddToggle("AutoStorageToggle", {Title = "Auto Deposit (Skip DB)", Default = false })
+ToggleStorage:OnChanged(function() Config.AutoStorage = ToggleStorage.Value; if Config.AutoStorage then RunAutoStorage() end end)
+
+local ToggleUseDB = Tabs.Main:AddToggle("AutoUseDBToggle", {Title = "Auto Use Dragonball (Trash)", Default = false })
+ToggleUseDB:OnChanged(function() Config.AutoUseDB = ToggleUseDB.Value end)
+
 
 -- Tab 2: Farm
 local SectionFarm = Tabs.Farm:AddSection("Attack & Skills")
@@ -523,4 +558,4 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 Window:SelectTab(1)
 SaveManager:LoadAutoloadConfig()
 
-Fluent:Notify({Title = "Liz HUB", Content = "Inf Tower Full Loop Active!", Duration = 5})
+Fluent:Notify({Title = "Liz HUB", Content = "Dragonball Check Fixed!", Duration = 5})
