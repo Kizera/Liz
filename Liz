@@ -13,6 +13,7 @@ local Tabs = {Main=Window:AddTab({Title="Auto Dungeon",Icon="castle"}), Farm=Win
 function ToggleAntiGravity(s) local c=LocalPlayer.Character; if not c or not c:FindFirstChild("HumanoidRootPart") then return end; if s then if not c.HumanoidRootPart:FindFirstChild("JemAntiGravity") then local b=Instance.new("BodyVelocity");b.Name="JemAntiGravity";b.Velocity=Vector3.zero;b.MaxForce=Vector3.new(1e5,1e5,1e5);b.Parent=c.HumanoidRootPart end else local b=c.HumanoidRootPart:FindFirstChild("JemAntiGravity");if b then b:Destroy() end end end
 local function LookAt(t) if t then Workspace.CurrentCamera.CFrame=CFrame.new(Workspace.CurrentCamera.CFrame.Position,t.Position) end end
 local function GetPartyID() local r=LocalPlayer:FindFirstChild("ReiNew"); if r then for _,v in pairs(r:GetChildren()) do if v:IsA("StringValue") and (v.Name:lower():match("party") or v.Name:lower():match("id")) and #v.Value>10 then return v.Value end end end; local p=LocalPlayer:FindFirstChild("PlayerValues"); if p then local v=p:FindFirstChild("PartyID") or p:FindFirstChild("SquadID"); if v then return v.Value end end; return nil end
+local function IsEmpty(v) return v=="" or v=="empty" or v=="None" or v=="{}" end -- [Fix] Added "None" check
 
 task.spawn(function() while true do -- VFX
     if Config.ReduceLag then pcall(function() for _,g in pairs(LocalPlayer.PlayerGui:GetChildren()) do if g.Name:lower():match("damage") or g.Name:lower():match("indicator") then g.Enabled=false end end end) else pcall(function() for _,g in pairs(LocalPlayer.PlayerGui:GetChildren()) do if g.Name:lower():match("damage") then g.Enabled=true end end end) end
@@ -27,27 +28,37 @@ task.spawn(function() while true do -- Combat
     task.wait(Config.SkillDelay>0 and Config.SkillDelay or 0.1)
 end end)
 
-task.spawn(function() while true do -- Auto Storage (Equip -> Deposit)
+task.spawn(function() while true do -- Fixed Auto Storage (Check All + None Fix)
     if Config.AutoStorage then
         local char, bp, pv, rn = LocalPlayer.Character, LocalPlayer:FindFirstChild("Backpack"), LocalPlayer:FindFirstChild("PlayerValues"), LocalPlayer:FindFirstChild("ReiNew")
         if char and char:FindFirstChild("Humanoid") and bp and pv and rn then
-            for _,it in pairs(bp:GetChildren()) do if not Config.AutoStorage then break end
+            -- [Fix] Collect items from BOTH Backpack and Character (Held items)
+            local allItems = {}
+            for _,t in pairs(char:GetChildren()) do if t:IsA("Tool") then table.insert(allItems, t) end end
+            for _,t in pairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(allItems, t) end end
+
+            for _,it in pairs(allItems) do
+                if not Config.AutoStorage then break end
                 local tSlot, action = nil, "store"
-                -- Check Item Type
-                if it.Name:lower():match("bag") then -- Bag
-                    for k=1,3 do local s=rn:FindFirstChild("ArmorStorage"..k); if s and (s.Value=="" or s.Value=="empty" or s.Value=="{}") then tSlot="ArmorStorage"..k; break end end
-                elseif it.Name:lower():match("dragonball") and Config.AutoUseDB then -- DB
+                local n = it.Name:lower()
+                
+                -- 1. Bag -> ArmorStorage (1-3)
+                if n:match("bag") then
+                    for k=1,3 do local s=rn:FindFirstChild("ArmorStorage"..k); if s and IsEmpty(s.Value) then tSlot="ArmorStorage"..k; break end end
+                -- 2. DB -> Use
+                elseif n:match("dragonball") and Config.AutoUseDB then
                     action="use"; tSlot=true
-                elseif it:FindFirstChild("Storable") and it.Storable.Value then -- Normal
-                    for k=1,12 do local s=pv:FindFirstChild("ItemStorage"..k); if s and (s.Value=="" or s.Value=="empty") then tSlot="ItemStorage"..k; break end end
+                -- 3. Normal -> ItemStorage (1-12)
+                elseif it:FindFirstChild("Storable") and it.Storable.Value then
+                    for k=1,12 do local s=pv:FindFirstChild("ItemStorage"..k); if s and IsEmpty(s.Value) then tSlot="ItemStorage"..k; break end end
                 end
                 
                 -- Execute
                 if tSlot then
-                    char.Humanoid:EquipTool(it); task.wait(0.3) -- Equip & Wait
+                    if it.Parent == bp then char.Humanoid:EquipTool(it); task.wait(0.2) end -- Equip if not held
                     if action=="use" then pcall(function() ItemRemote:FireServer(it.Name) end)
                     else ItemStoreRemote:FireServer(tSlot) end
-                    task.wait(0.3) -- Process Wait
+                    task.wait(0.3)
                 end
             end
         end
@@ -85,7 +96,7 @@ end end)
 Tabs.Main:AddDropdown("Rank",{Title="Rank",Values={"B","A","S","SS"},Default=1,Callback=function(v)Config.SelectedDungeonRank=v end})
 Tabs.Main:AddToggle("AD",{Title="Auto Dungeon",Default=false,Callback=function(v)Config.AutoDungeon=v end})
 Tabs.Main:AddToggle("AT",{Title="Auto Inf Tower",Default=false,Callback=function(v)Config.AutoTower=v end})
-Tabs.Main:AddToggle("AS",{Title="Auto Deposit (Equip Mode)",Default=false,Callback=function(v)Config.AutoStorage=v end})
+Tabs.Main:AddToggle("AS",{Title="Auto Deposit (+Fix None)",Default=false,Callback=function(v)Config.AutoStorage=v end})
 Tabs.Main:AddToggle("ADB",{Title="Auto Use DB",Default=false,Callback=function(v)Config.AutoUseDB=v end})
 Tabs.Farm:AddToggle("AK",{Title="Aura Kill",Default=false,Callback=function(v)Config.AuraKill=v end})
 Tabs.Farm:AddToggle("AM",{Title="Auto Madara",Default=false,Callback=function(v)Config.AutoMadara=v end})
@@ -99,4 +110,4 @@ Tabs.Misc:AddToggle("VFX",{Title="Off VFX",Default=false,Callback=function(v)Con
 Tabs.Misc:AddToggle("Lag",{Title="Reduce Lag",Default=false,Callback=function(v)Config.ReduceLag=v end})
 
 SaveManager:SetLibrary(Fluent); InterfaceManager:SetLibrary(Fluent); SaveManager:IgnoreThemeSettings(); SaveManager:SetIgnoreIndexes({}); SaveManager:BuildConfigSection(Tabs.Settings); InterfaceManager:BuildInterfaceSection(Tabs.Settings); Window:SelectTab(1); SaveManager:LoadAutoloadConfig()
-Fluent:Notify({Title="Liz HUB",Content="Compact 2.2.0 Loaded!",Duration=3})
+Fluent:Notify({Title="Liz HUB",Content="Compact 2.3.0 Loaded!",Duration=3})
