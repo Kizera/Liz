@@ -1,5 +1,5 @@
 -- =========================================================
--- LIZ HUB (VERSION 1.3.0 - DUAL SKILL SPAM)
+-- LIZ HUB (VERSION 1.5.0 - INFINITY TOWER RETURNED)
 -- =========================================================
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local Window = Fluent:CreateWindow({
     Title = "Liz HUB",
     SubTitle = "",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 500),
+    Size = UDim2.fromOffset(580, 550), -- ขยายจอหน่อย ฟังก์ชันเริ่มเยอะ
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
@@ -21,7 +21,6 @@ local Window = Fluent:CreateWindow({
 -- =========================================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
@@ -30,13 +29,14 @@ local DungeonRemotePath = ReplicatedStorage:WaitForChild("NEW37"):WaitForChild("
 
 local Config = {
     AutoDungeon = false,
+    AutoTower = false, -- [NEW] Auto Infinity Tower
     SelectedDungeonRank = "B",
     AutoFarm = false, 
     AuraKill = false,
     
-    -- [NEW] แยกตัวแปร Madara กับ Itachi
     AutoMadara = false, 
     AutoItachi = false,
+    ForceNoCD = true,
     
     SkillDelay = 0,
     OffVFX = false,    
@@ -82,6 +82,24 @@ local function LookAtTarget(targetPart)
     if not targetPart then return end
     local cam = Workspace.CurrentCamera
     cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position)
+end
+
+-- [Helper] Anti Gravity (บิน)
+function ToggleAntiGravity(state)
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    if state then
+        if not char.HumanoidRootPart:FindFirstChild("JemAntiGravity") then
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "JemAntiGravity"
+            bv.Velocity = Vector3.new(0,0,0)
+            bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+            bv.Parent = char.HumanoidRootPart
+        end
+    else
+        local bv = char.HumanoidRootPart:FindFirstChild("JemAntiGravity")
+        if bv then bv:Destroy() end
+    end
 end
 
 -- [1] Reduce Lag
@@ -149,7 +167,7 @@ function RunAutoMadara()
     end)
 end
 
--- [3.2] Auto Itachi (Dynamic Position)
+-- [3.2] Auto Itachi (Stat Breaker Logic)
 function RunAutoItachi()
     task.spawn(function()
         local r = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ItachiSusanooRibcageRemote")
@@ -157,16 +175,20 @@ function RunAutoItachi()
             local char = LocalPlayer.Character
             if char and char:FindFirstChild("HumanoidRootPart") then
                 local hrp = char.HumanoidRootPart
-                -- อัปเดตพิกัดตามตัวละครเราตลอดเวลา
-                local args = {
-                    false,
-                    hrp.Position, 
-                    hrp.CFrame,   
-                    1
-                }
+                if Config.ForceNoCD then
+                    pcall(function()
+                        local pv = LocalPlayer:FindFirstChild("PlayerValues")
+                        if pv then
+                            if pv:FindFirstChild("Activated") then pv.Activated.Value = false end
+                            if pv:FindFirstChild("CooldownReduction") then pv.CooldownReduction.Value = 0 end
+                            if pv:FindFirstChild("Speed") then pv.Speed.Value = 0 end
+                        end
+                    end)
+                end
+                local args = { false, hrp.Position, hrp.CFrame, 1 }
                 r:FireServer(unpack(args))
             end
-            if Config.SkillDelay <= 0 then task.wait() else task.wait(Config.SkillDelay) end
+            if Config.SkillDelay <= 0 then else task.wait(Config.SkillDelay) end
         end
     end)
 end
@@ -233,24 +255,68 @@ function RunAutoDungeon()
     end)
 end
 
--- [6] Auto Farm
-function ToggleAntiGravity(state)
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    if state then
-        if not char.HumanoidRootPart:FindFirstChild("JemAntiGravity") then
-            local bv = Instance.new("BodyVelocity")
-            bv.Name = "JemAntiGravity"
-            bv.Velocity = Vector3.new(0,0,0)
-            bv.MaxForce = Vector3.new(1e5,1e5,1e5)
-            bv.Parent = char.HumanoidRootPart
+-- [8] Auto Infinity Tower (Logic: Kill All -> Find NPC/Prompt)
+function RunAutoTower()
+    ToggleAntiGravity(true)
+    task.spawn(function()
+        while Config.AutoTower do
+            task.wait() -- ติ๊กตลอดเวลา
+            local char = LocalPlayer.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+            
+            -- Step 1: หามอนก่อน
+            local folder = Workspace:FindFirstChild("Live")
+            local targetMob = nil
+            local mobCount = 0 
+            
+            if folder then
+                for _, mob in pairs(folder:GetChildren()) do
+                    if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
+                        mobCount = mobCount + 1
+                        targetMob = mob
+                        break -- เจอตัวนึงก็พุ่งไปก่อนเลย
+                    end
+                end
+            end
+            
+            if targetMob then
+                -- [[ Phase 1: ตีมอน ]]
+                local targetPos = targetMob.HumanoidRootPart.Position
+                local flyPos = CFrame.new(targetPos + Vector3.new(0, 12, 0), targetPos)
+                char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame:Lerp(flyPos, 0.5)
+                char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position, targetPos)
+            else
+                -- [[ Phase 2: มอนหมด -> หาปุ่มกด (ระยะประชิด) ]]
+                task.wait(0.5) -- รอแป๊บเผื่อมอนเกิด
+                if Config.AutoTower then
+                    local foundPrompt = false
+                    for _, prompt in pairs(Workspace:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                            if prompt.Parent and prompt.Parent:IsA("BasePart") then
+                                -- วาร์ปไปจูบปาก NPC/ปุ่ม (ระยะสั้นมากๆ ตามที่ขอ)
+                                char.HumanoidRootPart.CFrame = prompt.Parent.CFrame
+                                foundPrompt = true
+                                
+                                task.wait(0.2)
+                                if fireproximityprompt then
+                                    fireproximityprompt(prompt)
+                                else
+                                    prompt:InputHoldBegin()
+                                    task.wait(prompt.HoldDuration + 0.1)
+                                    prompt:InputHoldEnd()
+                                end
+                                task.wait(0.5) -- กดเสร็จรอนิดนึง
+                            end
+                        end
+                    end
+                end
+            end
         end
-    else
-        local bv = char.HumanoidRootPart:FindFirstChild("JemAntiGravity")
-        if bv then bv:Destroy() end
-    end
+        ToggleAntiGravity(false)
+    end)
 end
 
+-- [6] Auto Farm (Normal)
 function RunAutoFarm()
     ToggleAntiGravity(true)
     task.spawn(function()
@@ -331,22 +397,29 @@ DropdownRank:OnChanged(function(V) Config.SelectedDungeonRank = V end)
 local ToggleDungeon = Tabs.Main:AddToggle("AutoDungeonToggle", {Title = "Auto Dungeon (Loop)", Default = false })
 ToggleDungeon:OnChanged(function() Config.AutoDungeon = ToggleDungeon.Value; if Config.AutoDungeon then RunAutoDungeon() end end)
 
+local SectionTower = Tabs.Main:AddSection("Infinity Tower Mode")
+local ToggleTower = Tabs.Main:AddToggle("AutoTowerToggle", {Title = "Auto Infinity Tower (Kill -> Interact)", Default = false })
+ToggleTower:OnChanged(function() Config.AutoTower = ToggleTower.Value; if Config.AutoTower then RunAutoTower() else ToggleAntiGravity(false) end end)
+
+
 -- Tab 2: Farm
 local SectionFarm = Tabs.Farm:AddSection("Attack & Skills")
 local ToggleAura = Tabs.Farm:AddToggle("AuraKillToggle", {Title = "Aura Kill", Default = false })
 ToggleAura:OnChanged(function() Config.AuraKill = ToggleAura.Value; if Config.AuraKill then RunAuraKill() end end)
 
--- [NEW] Separate Toggles for Madara and Itachi
 local ToggleMadara = Tabs.Farm:AddToggle("AutoMadaraToggle", {Title = "Auto Madara (Fifth)", Default = false })
 ToggleMadara:OnChanged(function() Config.AutoMadara = ToggleMadara.Value; if Config.AutoMadara then RunAutoMadara() end end)
 
 local ToggleItachi = Tabs.Farm:AddToggle("AutoItachiToggle", {Title = "Auto Itachi (Ribcage)", Default = false })
 ToggleItachi:OnChanged(function() Config.AutoItachi = ToggleItachi.Value; if Config.AutoItachi then RunAutoItachi() end end)
 
+local ToggleNoCD = Tabs.Farm:AddToggle("ForceNoCDToggle", {Title = "Force No Cooldown (Bypass)", Default = true })
+ToggleNoCD:OnChanged(function() Config.ForceNoCD = ToggleNoCD.Value end)
+
 local SliderSkill = Tabs.Farm:AddSlider("SkillSpeedSlider", {Title = "Spam Delay (Both)", Default = 0, Min = 0, Max = 1, Rounding = 2, Callback = function(V) Config.SkillDelay = V end})
 
 local SectionMovement = Tabs.Farm:AddSection("Movement")
-local ToggleFarm = Tabs.Farm:AddToggle("AutoFarmToggle", {Title = "Auto Farm All Mob", Default = false })
+local ToggleFarm = Tabs.Farm:AddToggle("AutoFarmToggle", {Title = "Auto Farm All Mob (Normal)", Default = false })
 ToggleFarm:OnChanged(function() Config.AutoFarm = ToggleFarm.Value; if Config.AutoFarm then RunAutoFarm() else ToggleAntiGravity(false) end end)
 
 -- Tab 3: Teleport
@@ -394,7 +467,7 @@ SaveManager:BuildConfigSection(Tabs.Settings)
 InterfaceManager:SetLibrary(Fluent)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 
-Window:SelectTab(2)
+Window:SelectTab(1)
 SaveManager:LoadAutoloadConfig()
 
-Fluent:Notify({Title = "Liz HUB", Content = "Madara & Itachi Added!", Duration = 5})
+Fluent:Notify({Title = "Liz HUB", Content = "Infinity Tower Mode Added!", Duration = 5})
